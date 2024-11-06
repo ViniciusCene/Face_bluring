@@ -30,8 +30,8 @@ Ensure you have Python 3.7 or higher installed. This project relies on the OpenC
 1. Clone this repository:
 
     ```bash
-    git clone https://github.com/yourusername/YuNet-Automatic-Face-Blurring.git
-    cd YuNet-Automatic-Face-Blurring
+    git clone https://github.com/yourusername/Face_blurring.git
+    cd Face_blurring
     ```
 
 2. Install the required Python dependencies:
@@ -72,7 +72,7 @@ python3 -m pip install -r requirements.txt
 The project is organized as follows:
 
 ```
-YuNet-Automatic-Face-Blurring/
+Face_blurring/
 ├── LICENSE
 ├── README.md
 └── src/
