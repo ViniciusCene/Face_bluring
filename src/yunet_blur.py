@@ -8,6 +8,7 @@
 # Basic imports
 import numpy as np
 import cv2 as cv
+import os
 
 # Check OpenCV version
 opencv_python_version = lambda str_version: tuple(map(int, (str_version.split("."))))
@@ -115,7 +116,7 @@ def scale_roi(roi_x0=None, roi_y0=None, roi_width=None, roi_height=None, ratio=1
         _description_
     """
     # calculate the proportional bluring ratio surrounding the original ROI central point
-   # center_ratios = [int(roi_width/2), int(roi_height/2)] # central points for w and h
+    # center_ratios = [int(roi_width/2), int(roi_height/2)] # central points for w and h
     center_width = int(roi_width/2)
     center_height = int(roi_height/2)
 
@@ -186,11 +187,14 @@ def yunet_config():
         _description_
     """
 
+    # Construct the relative path to the model
+    model_path = os.path.join(os.path.dirname(__file__), "trained_models/yunet/face_detection_yunet_2023mar.onnx")
+
     # Instantiate YuNet
     model = YuNet(
 
         # Path of model weights
-        modelPath="trained_models/yunet/face_detection_yunet_2023mar.onnx",
+        modelPath=model_path,
 
         # Standard image input dimension (do not change that)!
         inputSize=[320, 320],
@@ -205,7 +209,7 @@ def yunet_config():
         topK=5000,
 
     )
-
+    
     return model
 
 
