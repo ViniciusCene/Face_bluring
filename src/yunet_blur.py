@@ -209,7 +209,7 @@ def yunet_config():
         topK=5000,
 
     )
-    print("model: ", model)
+    
     return model
 
 
