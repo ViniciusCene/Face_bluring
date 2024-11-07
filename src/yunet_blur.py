@@ -44,6 +44,10 @@ def visualize(image, results, box_color=(0, 255, 0), text_font=cv.FONT_HERSHEY_S
     _type_
         _description_
     """
+
+    if results is None or len(results) == 0:
+        return image
+
     frame = image.copy()
     landmark_color = [
         (255, 0, 0),  # right eye
@@ -140,37 +144,23 @@ def scale_roi(roi_x0=None, roi_y0=None, roi_width=None, roi_height=None, ratio=1
 
 def face_blur(frame=None, scaled_coord=None, scaled_ratios=None):
     """
-    face_blur _summary_
-
-    _extended_summary_
-
-    Parameters
-    ----------
-    frame : _type_, optional
-        _description_, by default None
-    scaled_coord : _type_, optional
-        _description_, by default None
-    scaled_ratios : _type_, optional
-        _description_, by default None
-
-    Returns
-    -------
-    _type_
-        _description_
+    Applies Gaussian blur to the face ROI if within frame bounds.
     """
-    scaled_roi = frame[
-        scaled_coord[1]:scaled_coord[1] + scaled_ratios[1],
-        scaled_coord[0]:scaled_coord[0] + scaled_ratios[0],
-    ]
 
-    # Apply Gaussian blur to the face ROI
+    x, y = scaled_coord
+    w, h = scaled_ratios
+    
+    # Ensure ROI is within the bounds of the image frame
+    if y < 0 or x < 0 or y + h > frame.shape[0] or x + w > frame.shape[1]:
+        print("Warning: ROI out of bounds, skipping blur.")
+        return frame
+
+    # Extract the ROI and apply Gaussian blur
+    scaled_roi = frame[y:y + h, x:x + w]
     blurred_face = cv.GaussianBlur(scaled_roi, (99, 99), 30)
 
     # Place the blurred face back into the original frame
-    frame[
-        scaled_coord[1]:scaled_coord[1] + scaled_ratios[1],
-        scaled_coord[0]:scaled_coord[0] + scaled_ratios[0],
-    ] = blurred_face
+    frame[y:y + h, x:x + w] = blurred_face
 
     return frame
 
@@ -187,14 +177,11 @@ def yunet_config():
         _description_
     """
 
-    # Construct the relative path to the model
-    model_path = os.path.join(os.path.dirname(__file__), "trained_models/yunet/face_detection_yunet_2023mar.onnx")
-
     # Instantiate YuNet
     model = YuNet(
 
         # Path of model weights
-        modelPath=model_path,
+        modelPath=os.path.join(os.path.dirname(__file__), "trained_models/yunet/face_detection_yunet_2023mar.onnx"),
 
         # Standard image input dimension (do not change that)!
         inputSize=[320, 320],
