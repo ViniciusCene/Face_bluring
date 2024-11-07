@@ -1,297 +1,220 @@
-# This method is an automatic face blurring algorithm based on YuNet hosted in the OpenCV Zoo project.
-# It is subject to the MIT License terms in the LICENSE file found in the same directory.
-#
-# The YuNet is a Copyright (C) model from 2021, from Shenzhen Institute of Artificial Intelligence and Robotics for Society, all rights reserved.
-# Third party copyrights are property of their respective owners.
-# More details can be found at https://github.com/opencv/opencv_zoo/blob/main/models/face_detection_yunet/README.md
-
-# Basic imports
+# Imports
+import os
 import numpy as np
 import cv2 as cv
-import os
-
-# Check OpenCV version
-opencv_python_version = lambda str_version: tuple(map(int, (str_version.split("."))))
-assert opencv_python_version(cv.__version__) >= opencv_python_version(
-    "4.10.0"
-), "Please install latest opencv-python for benchmark: python3 -m pip install --upgrade opencv-python"
-
-# Importing the model
 from yunet import YuNet
 
+# Check OpenCV version
+assert tuple(map(int, cv.__version__.split("."))) >= (4, 10, 0), (
+    "Please install the latest version of opencv-python (>= 4.10.0)."
+)
 
-def visualize(image, results, box_color=(0, 255, 0), text_font=cv.FONT_HERSHEY_SIMPLEX, text_color=(0, 0, 255), fps=None):
+
+def visualize(image, results, box_color=(0, 255, 0), text_color=(0, 0, 255), 
+              fps=None):
     """
-    visualize _summary_
-
-    _extended_summary_
+    Draws bounding boxes, landmarks, and applies blur to detected faces 
+    in the image.
 
     Parameters
     ----------
-    image : _type_
-        _description_
-    results : _type_
-        _description_
+    image : np.array
+        Input image frame in which faces are detected.
+    results : list or np.array
+        List of face detection results with bounding boxes and landmarks.
     box_color : tuple, optional
-        _description_, by default (0, 255, 0)
+        Color of the bounding box in (B, G, R) format, by default (0, 255, 0).
     text_color : tuple, optional
-        _description_, by default (0, 0, 255)
-    fps : _type_, optional
-        _description_, by default None
+        Color of the text displaying FPS, by default (0, 0, 255).
+    fps : float, optional
+        Frames per second to be displayed, by default None.
 
     Returns
     -------
-    _type_
-        _description_
+    np.array
+        Image with annotations and blurred faces.
     """
-
-    if results is None or len(results) == 0:
+    if results is None or results.size == 0:
         return image
 
     frame = image.copy()
-    landmark_color = [
-        (255, 0, 0),  # right eye
-        (0, 0, 255),  # left eye
-        (0, 255, 0),  # nose tip
-        (255, 0, 255),  # right mouth corner
-        (0, 255, 255),  # left mouth corner
+    landmarks_color = [
+        (255, 0, 0), (0, 0, 255), (0, 255, 0), (255, 0, 255), (0, 255, 255)
     ]
 
-    if fps is not None:
-        cv.putText(
-            frame, "FPS: {:.2f}".format(fps), (0, 15), text_font, 0.5, text_color
-        )
-
-    ratio=1.5
+    if fps:
+        cv.putText(frame, f"FPS: {fps:.2f}", (0, 15), cv.FONT_HERSHEY_SIMPLEX, 
+                   0.5, text_color)
 
     for det in results:
-        [roi_x0, roi_y0, roi_width, roi_height] = det[0:4].astype(np.int32)
-        scaled_coord, scaled_ratios = scale_roi(roi_x0, roi_y0, roi_width, roi_height, ratio)
-
-        cv.rectangle(
-            frame,
-            (scaled_coord[0], scaled_coord[1]),
-            (scaled_coord[0] + scaled_ratios[0], scaled_coord[1] + scaled_ratios[1]),
-            box_color,
-            2,
+        roi_x0, roi_y0, roi_w, roi_h = det[:4].astype(int)
+        scaled_coord, scaled_size = scale_roi(
+            roi_x0, roi_y0, roi_w, roi_h, ratio=1.5
         )
-
-        frame = face_blur(frame, scaled_coord, scaled_ratios)
-
         score = det[-1]
+
+        # Draw bounding box and blur the face
+        cv.rectangle(
+            frame, tuple(scaled_coord), tuple(scaled_coord + scaled_size), 
+            box_color, 2
+        )
+        frame = face_blur(frame, scaled_coord, scaled_size)
+
+        # Display detection score
         cv.putText(
-            frame,
-            "{:.4f}".format(score),
-            (roi_x0, roi_y0 + 12),
-            text_font,
-            0.5,
-            text_color,
+            frame, f"{score:.4f}", (roi_x0, roi_y0 + 12), cv.FONT_HERSHEY_SIMPLEX, 
+            0.5, text_color
         )
 
-        landmarks = det[4:14].astype(np.int32).reshape((5, 2))
-        for idx, landmark in enumerate(landmarks):
-            cv.circle(frame, landmark, 2, landmark_color[idx], 2)
+        # Draw landmarks
+        for idx, (x, y) in enumerate(det[4:14].reshape(5, 2).astype(int)):
+            cv.circle(frame, (x, y), 2, landmarks_color[idx], 2)
 
     return frame
 
 
-def scale_roi(roi_x0=None, roi_y0=None, roi_width=None, roi_height=None, ratio=1):
+def scale_roi(x0, y0, width, height, ratio=1.0):
     """
-    scale_roi _summary_
-
-    _extended_summary_
+    Scales the region of interest (ROI) for blurring based on the given ratio.
 
     Parameters
     ----------
-    roi_x0 : _type_, optional
-        _description_, by default None
-    roi_y0 : _type_, optional
-        _description_, by default None
-    roi_width : _type_, optional
-        _description_, by default None
-    roi_height : _type_, optional
-        _description_, by default None
-    ratio : int, optional
-        _description_, by default 1
+    x0 : int
+        X-coordinate of the top-left corner of the bounding box.
+    y0 : int
+        Y-coordinate of the top-left corner of the bounding box.
+    width : int
+        Width of the bounding box.
+    height : int
+        Height of the bounding box.
+    ratio : float, optional
+        Scaling ratio for the ROI, by default 1.0.
 
     Returns
     -------
-    _type_
-        _description_
+    tuple of np.array
+        Scaled top-left corner coordinates and dimensions (width, height) 
+        of the ROI.
     """
-    # calculate the proportional bluring ratio surrounding the original ROI central point
-    # center_ratios = [int(roi_width/2), int(roi_height/2)] # central points for w and h
-    center_width = int(roi_width/2)
-    center_height = int(roi_height/2)
-
-    #central_coord = [roi_x0 + center_ratios[0], roi_y0 + center_ratios[1]]
-    roi_center_x0 = roi_x0 + center_width
-    roi_center_y0 = roi_y0 + center_height
-
-    #scaled_ratios = [int(central_coord[0] * ratio), int(central_coord[1] * ratio)]
-    scaled_height = int(roi_height * ratio)
-    scaled_width = int(roi_width * ratio)
-   
-    #scaled_coord = [int(central_coord[0] - scaled_ratios[0]/2), int(central_coord[1] - scaled_ratios[1]/2)]
-    scaled_x0 = int(roi_center_x0 - scaled_width/2)
-    scaled_y0 = int(roi_center_y0 - scaled_height/2)
-
-    scaled_coord = [scaled_x0, scaled_y0]
-    scaled_ratios = [scaled_width, scaled_height]
-
-    return scaled_coord, scaled_ratios
+    center_x, center_y = x0 + width // 2, y0 + height // 2
+    new_width, new_height = int(width * ratio), int(height * ratio)
+    new_x0, new_y0 = center_x - new_width // 2, center_y - new_height // 2
+    return np.array([new_x0, new_y0]), np.array([new_width, new_height])
 
 
-def face_blur(frame=None, scaled_coord=None, scaled_ratios=None):
+def face_blur(frame, coord, size):
     """
-    Applies Gaussian blur to the face ROI if within frame bounds.
-    """
+    Applies Gaussian blur to the specified face region in the frame.
 
-    x, y = scaled_coord
-    w, h = scaled_ratios
-    
-    # Ensure ROI is within the bounds of the image frame
+    Parameters
+    ----------
+    frame : np.array
+        Input image frame where blurring is applied.
+    coord : np.array
+        Top-left corner coordinates of the region to blur.
+    size : np.array
+        Dimensions (width, height) of the region to blur.
+
+    Returns
+    -------
+    np.array
+        Image frame with the specified region blurred.
+    """
+    x, y = coord
+    w, h = size
     if y < 0 or x < 0 or y + h > frame.shape[0] or x + w > frame.shape[1]:
         print("Warning: ROI out of bounds, skipping blur.")
         return frame
-
-    # Extract the ROI and apply Gaussian blur
-    scaled_roi = frame[y:y + h, x:x + w]
-    blurred_face = cv.GaussianBlur(scaled_roi, (99, 99), 30)
-
-    # Place the blurred face back into the original frame
-    frame[y:y + h, x:x + w] = blurred_face
-
+    frame[y:y+h, x:x+w] = cv.GaussianBlur(frame[y:y+h, x:x+w], (99, 99), 30)
     return frame
 
 
-def yunet_config():
+def load_yunet_model():
     """
-    yunet_config _summary_
-
-    _extended_summary_
+    Loads the YuNet model from the trained models directory.
 
     Returns
     -------
-    _type_
-        _description_
+    YuNet
+        Configured YuNet model for face detection.
     """
-
-    # Instantiate YuNet
-    model = YuNet(
-
-        # Path of model weights
-        modelPath=os.path.join(os.path.dirname(__file__), "trained_models/yunet/face_detection_yunet_2023mar.onnx"),
-
-        # Standard image input dimension (do not change that)!
-        inputSize=[320, 320],
-
-        # Threshold to identify faces (lower is more permissive but also prone to false detection)
-        confThreshold=0.85,
-
-        # Threshold to suppress bounding boxes of IoU >= nms_threshold. Default = 0.3
-        nmsThreshold=0.3,
-
-        # Keep top_k bounding boxes of face detection before nmsThreshold
-        topK=5000,
-
+    model_path = os.path.join(
+        os.path.dirname(__file__), 
+        "trained_models/yunet/face_detection_yunet_2023mar.onnx"
     )
-    
-    return model
+    return YuNet(
+        modelPath=model_path, inputSize=[320, 320], confThreshold=0.85, 
+        nmsThreshold=0.3, topK=5000
+    )
 
 
-def config_video_input():
+def setup_video_input():
     """
-    config_video_input _summary_
-
-    _extended_summary_
+    Sets up video input from the default webcam.
 
     Returns
     -------
-    _type_
-        _description_
+    tuple
+        Video capture object and resolution (width, height).
     """
     cap = cv.VideoCapture(0)
-    img_resolution = [
-        int(cap.get(cv.CAP_PROP_FRAME_WIDTH)),
+    resolution = (
+        int(cap.get(cv.CAP_PROP_FRAME_WIDTH)), 
         int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
-    ]
+    )
+    return cap, resolution
 
-    return cap, img_resolution
 
-
-def config_output_file(img_resolution=[680, 480]):
+def setup_video_output(resolution):
     """
-    config_output_file _summary_
-
-    _extended_summary_
+    Sets up the video output file for saving processed video.
 
     Parameters
     ----------
-    img_resolution : list, optional
-        _description_, by default [680, 480]
+    resolution : tuple
+        Resolution (width, height) of the video output.
 
     Returns
     -------
-    _type_
-        _description_
+    cv.VideoWriter
+        VideoWriter object to save the processed video.
     """
     fourcc = cv.VideoWriter_fourcc(*"XVID")
-    outup_file = cv.VideoWriter(
-        "blurred_video2.avi", fourcc, 40.0, (img_resolution)
-    )
-
-    return outup_file
+    return cv.VideoWriter("blurred_video.avi", fourcc, 40.0, resolution)
 
 
 def main():
     """
-    main _summary_
+    Main function to run the face blurring application.
+    Sets up video input, loads model, processes each frame, and displays 
+    the output.
 
-    _extended_summary_
+    Returns
+    -------
+    None
     """
+    cap, resolution = setup_video_input()
+    model = load_yunet_model()
+    model.setInputSize(resolution)
+    output_file = setup_video_output(resolution)
+    timer = cv.TickMeter()
 
-    # Configure video input
-    cap, img_resolution = config_video_input()
-
-    # Configure model
-    model = yunet_config()
-    model.setInputSize(img_resolution)
-
-    # Configure video output
-    outup_file = config_output_file(img_resolution)
-
-    # tm will be used to calculate fps
-    tm = cv.TickMeter()
-
-    # Runs until any key is pressed
     while cv.waitKey(1) < 0:
-
-        # Capture frame from video input
         has_frame, frame = cap.read()
         if not has_frame:
             print("No frames grabbed!")
             break
 
-        # Model inference using frame
-        tm.start()
-        results = model.infer(frame)  # results is a tuple
-        tm.stop()
+        timer.start()
+        results = model.infer(frame)
+        timer.stop()
+        frame = visualize(frame, results, fps=timer.getFPS())
+        output_file.write(frame)
+        cv.imshow("YuNet Face Blurring", frame)
+        timer.reset()
 
-        # Visualize results with boundarie box draw, bluring, and face detection score
-        frame = visualize(frame, results, fps=tm.getFPS())
-
-        # Add the processed frame to the output processed file
-        outup_file.write(frame)
-
-        # Visualize results on-the-fly
-        cv.imshow("YuNet Blurring", frame)
-
-        tm.reset()
-
-    # Release the video capture and close the window
     cap.release()
-    outup_file.release()
+    output_file.release()
     cv.destroyAllWindows()
 
 
