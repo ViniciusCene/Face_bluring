@@ -20,7 +20,8 @@ class YuNetBlurGUI:
         self.root = root
         self.root.title("YuNet Automatic Face Blurring")
 
-        # Set the window to full-screen mode
+        # Set the window to full-screen mode by default
+        self.is_fullscreen = True
         self.root.attributes('-fullscreen', True)
 
         # Video variables
@@ -33,13 +34,12 @@ class YuNetBlurGUI:
         self.video_writer = None
 
         # Get screen size
-        screen_width = self.root.winfo_screenwidth()
-        screen_height = self.root.winfo_screenheight()
+        self.screen_width = self.root.winfo_screenwidth()
+        self.screen_height = self.root.winfo_screenheight()
 
-        # Reserve space for the controls (buttons, slider, etc.)
-        control_height = 200  # Adjust this value if needed
-        self.canvas_width = int(screen_width * 0.9)
-        self.canvas_height = int((screen_height - control_height) * 0.9)
+        # Initial canvas dimensions
+        self.canvas_width = int(self.screen_width * 0.9)
+        self.canvas_height = int((self.screen_height - 200) * 0.8)
 
         # GUI Components
         # Frame for canvas with padding and borders
@@ -57,12 +57,23 @@ class YuNetBlurGUI:
         )
         self.canvas.pack()
 
+        # Frame for buttons
+        self.button_frame = ttk.Frame(root, padding=5)
+        self.button_frame.pack(fill="both", expand=False)
+
         # Start/Stop Button with enhanced styling
         self.start_button = ttk.Button(
-            root, text="Start", command=self.toggle_video_processing,
+            self.button_frame, text="Start", command=self.toggle_video_processing,
             bootstyle="success-outline", padding=10, width=20
         )
-        self.start_button.pack(pady=10)
+        self.start_button.grid(row=0, column=0, padx=10)
+
+        # Full-Screen Toggle Button
+        self.fullscreen_button = ttk.Button(
+            self.button_frame, text="Full Screen: OFF", command=self.toggle_fullscreen,
+            bootstyle="secondary-outline", padding=10, width=20
+        )
+        self.fullscreen_button.grid(row=0, column=1, padx=10)
 
         # Frame for sliders
         self.slider_frame = ttk.Frame(root, padding=5)
@@ -109,9 +120,36 @@ class YuNetBlurGUI:
 
         self.video_thread = None
 
-        # Bind Esc key to exit full-screen mode
-        self.root.bind("<Escape>", self.exit_fullscreen)
+    def toggle_fullscreen(self):
+        """
+        Toggles between full-screen and windowed mode.
+        """
+        if self.is_fullscreen:
+            # Switch to windowed mode
+            self.root.attributes('-fullscreen', False)
+            window_width = int(self.screen_width * 0.75)
+            window_height = int(self.screen_height * 0.75)
+            x_offset = (self.screen_width - window_width) // 2
+            y_offset = (self.screen_height - window_height) // 2
+            self.root.geometry(f"{window_width}x{window_height}+{x_offset}+{y_offset}")
+            self.fullscreen_button.config(text="Full Screen: ON")
 
+            # Adjust canvas dimensions for windowed mode
+            self.canvas_width = int(window_width * 0.9)
+            self.canvas_height = int((window_height - 200) * 0.8)  # Reserve space for controls
+            self.canvas.config(width=self.canvas_width, height=self.canvas_height)
+        else:
+            # Switch to full-screen mode
+            self.root.attributes('-fullscreen', True)
+            self.fullscreen_button.config(text="Full Screen: OFF")
+
+            # Adjust canvas dimensions for full-screen mode
+            self.canvas_width = int(self.screen_width * 0.9)
+            self.canvas_height = int((self.screen_height - 200) * 0.8)  # Reserve space for controls
+            self.canvas.config(width=self.canvas_width, height=self.canvas_height)
+
+        self.is_fullscreen = not self.is_fullscreen
+    
     def toggle_video_processing(self):
         """
         Starts or stops the video processing based on the current state.
