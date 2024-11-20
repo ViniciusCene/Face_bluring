@@ -75,6 +75,18 @@ class YuNetBlurGUI:
         )
         self.fullscreen_button.grid(row=0, column=1, padx=10)
 
+        # Eyes Visible Toggle Button
+        self.eyes_visible = False  # Default state
+        self.eyes_toggle_button = ttk.Button(
+            self.button_frame,
+            text="Eyes Visible: OFF",
+            command=self.toggle_eyes_visible,
+            bootstyle="info-outline",
+            padding=10,
+            width=20
+        )
+        self.eyes_toggle_button.grid(row=0, column=2, padx=10)
+
         # Exit Program Button
         self.exit_button = ttk.Button(
             self.button_frame,
@@ -84,7 +96,7 @@ class YuNetBlurGUI:
             padding=10,
             width=20
         )
-        self.exit_button.grid(row=0, column=2, padx=10)
+        self.exit_button.grid(row=0, column=3, padx=10)
 
         # Frame for sliders
         self.slider_frame = ttk.Frame(root, padding=5)
@@ -160,7 +172,17 @@ class YuNetBlurGUI:
             self.canvas.config(width=self.canvas_width, height=self.canvas_height)
 
         self.is_fullscreen = not self.is_fullscreen
-    
+
+    def toggle_eyes_visible(self):
+        """
+        Toggles the state of the 'eyes_visible' functionality and updates the button text.
+        """
+        self.eyes_visible = not self.eyes_visible
+        if self.eyes_visible:
+            self.eyes_toggle_button.config(text="Eyes Visible: ON", bootstyle="success-outline")
+        else:
+            self.eyes_toggle_button.config(text="Eyes Visible: OFF", bootstyle="info-outline")
+        
     def toggle_video_processing(self):
         """
         Toggles video processing on/off and updates the Start/Stop button text.
