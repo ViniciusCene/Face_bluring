@@ -28,6 +28,7 @@ class YuNetBlurGUI:
         self.model = None
         self.running = False
         self.conf_threshold = 0.45  # Default confidence threshold
+        self.blur_intensity = 5     # Default blur intensity
         self.video_writer = None
 
         # Get screen size
@@ -35,14 +36,14 @@ class YuNetBlurGUI:
         screen_height = self.root.winfo_screenheight()
 
         # Reserve space for the controls (buttons, slider, etc.)
-        control_height = 100  # Adjust this value if needed
+        control_height = 150  # Adjust this value if needed
         self.canvas_width = int(screen_width * 0.9)
         self.canvas_height = int((screen_height - control_height) * 0.9)
 
         # GUI Components
         # Frame for canvas with padding and borders
         self.canvas_frame = ttk.Frame(
-            root, padding=10, bootstyle="secondary"  # Add padding and style
+            root, padding=10, bootstyle="secondary"
         )
         self.canvas_frame.pack(fill="both", expand=False, pady=10)
 
@@ -51,8 +52,7 @@ class YuNetBlurGUI:
             self.canvas_frame,
             width=self.canvas_width,
             height=self.canvas_height,
-            relief="solid",  # Add border to the canvas
-            borderwidth=2,
+            relief="solid", borderwidth=2,
         )
         self.canvas.pack()
 
@@ -63,20 +63,35 @@ class YuNetBlurGUI:
         )
         self.start_button.pack(pady=10)
 
+        # Frame for sliders
+        self.slider_frame = ttk.Frame(root, padding=5)
+        self.slider_frame.pack(fill="both", expand=False)
+
         # Confidence Threshold Slider
-        self.threshold_label = ttk.Label(root, text="Confidence Threshold:")
-        self.threshold_label.pack(pady=5)
+        self.threshold_label = ttk.Label(self.slider_frame, text="Confidence Threshold:")
+        self.threshold_label.grid(row=0, column=0, padx=5)
         self.threshold_slider = ttk.Scale(
-            root, from_=0.1, to=1.0, value=self.conf_threshold, length=400,
+            self.slider_frame, from_=0.1, to=1.0, value=self.conf_threshold, length=200,
             command=self.update_threshold, orient=HORIZONTAL, bootstyle="info"
         )
-        self.threshold_slider.pack(pady=5)
-
-        # Real-time numeric display for threshold value
+        self.threshold_slider.grid(row=1, column=0, padx=5)
         self.threshold_value_label = ttk.Label(
-            root, text=f"Current Value: {self.conf_threshold:.2f}", bootstyle="info"
+            self.slider_frame, text=f"Confidence: {self.conf_threshold:.2f}", bootstyle="info"
         )
-        self.threshold_value_label.pack(pady=5)
+        self.threshold_value_label.grid(row=2, column=0, padx=5)
+
+        # Blur Intensity Slider
+        self.blur_label = ttk.Label(self.slider_frame, text="Blur Intensity (1 to 20):")
+        self.blur_label.grid(row=0, column=1, padx=5)
+        self.blur_slider = ttk.Scale(
+            self.slider_frame, from_=1, to=20, value=self.blur_intensity, length=200,
+            command=self.update_blur_intensity, orient=HORIZONTAL, bootstyle="info"
+        )
+        self.blur_slider.grid(row=1, column=1, padx=5)
+        self.blur_value_label = ttk.Label(
+            self.slider_frame, text=f"Blur Intensity: {self.blur_intensity}", bootstyle="info"
+        )
+        self.blur_value_label.grid(row=2, column=1, padx=5)
 
         self.video_thread = None
 
@@ -134,28 +149,32 @@ class YuNetBlurGUI:
         """
         self.cap = cv.VideoCapture(0)
 
-        # Measure frame processing times
+        # Fallback FPS in case the camera does not provide it
+        fallback_fps = 20
+        fps = int(self.cap.get(cv.CAP_PROP_FPS))
+        fps = fps if fps > 0 else fallback_fps
+
+        # Configure video writer (initialized later when FPS is determined)
+        fourcc = cv.VideoWriter_fourcc(*"XVID")
+        frame_width = self.canvas_width
+        frame_height = self.canvas_height
+        self.video_writer = None
+
+        # Measure frame times
         frame_times = []
 
-        # Placeholder for video writer and dynamic FPS
-        fourcc = cv.VideoWriter_fourcc(*"XVID")
-        self.video_writer = None
-        actual_fps = None
-
         while self.running:
-            start_time = time.time()  # Start time of frame processing
+            start_time = time.time()  # Start timing for FPS measurement
 
             ret, frame = self.cap.read()
             if not ret:
                 break
 
-            # Dynamically reinitialize the YuNet model with the updated threshold
-            self.model = self.load_yunet_model()
-
             # Resize frame to match the canvas dimensions
-            resized_frame = cv.resize(frame, (self.canvas_width, self.canvas_height))
+            resized_frame = cv.resize(frame, (frame_width, frame_height))
 
             # Run inference
+            self.model = self.load_yunet_model()
             results = self.model.infer(cv.resize(frame, (320, 320)))
 
             # Resize results back to the resized frame dimensions
@@ -167,14 +186,16 @@ class YuNetBlurGUI:
             # Visualize results
             processed_frame = self.visualize(resized_frame, results)
 
-            # Initialize the video writer with the actual FPS (after a few frames)
-            if self.video_writer is None and len(frame_times) > 10:
-                actual_fps = 1 / (sum(frame_times) / len(frame_times))  # Average FPS
-                actual_fps = min(max(int(actual_fps), 1), 30)  # Clamp FPS
-                self.video_writer = cv.VideoWriter(
-                    "output_blurred.avi", fourcc, actual_fps,
-                    (self.canvas_width, self.canvas_height)
-                )
+            # Measure actual FPS dynamically after processing a few frames
+            if len(frame_times) > 10:
+                avg_fps = 1 / (sum(frame_times) / len(frame_times))
+                avg_fps = min(max(int(avg_fps), 1), 30)  # Clamp FPS between 1 and 30
+
+                # Initialize video writer with actual FPS if not already initialized
+                if self.video_writer is None:
+                    self.video_writer = cv.VideoWriter(
+                        "output_blurred.avi", fourcc, avg_fps, (frame_width, frame_height)
+                    )
 
             # Write processed frame to the video file
             if self.video_writer:
@@ -200,6 +221,11 @@ class YuNetBlurGUI:
         self.cap.release()
         if self.video_writer:
             self.video_writer.release()  # Ensure the writer is properly closed
+
+        # Debug: Print final average FPS
+        if frame_times:
+            avg_fps = 1 / (sum(frame_times) / len(frame_times))
+            print(f"Final Average FPS: {avg_fps:.2f}")
 
     def load_yunet_model(self):
         """
@@ -239,25 +265,22 @@ class YuNetBlurGUI:
         if results is None or results.size == 0:
             return image
 
-        height, width = image.shape[:2]
-
         for det in results:
-            # Extract bounding box and scale it
             roi_x0, roi_y0, roi_w, roi_h = det[:4].astype(int)
             x, y, w, h = self.scale_roi(roi_x0, roi_y0, roi_w, roi_h, ratio=1.5)
 
-            # Ensure ROI is within frame bounds
+            # Ensure ROI is within bounds
             x = max(0, x)
             y = max(0, y)
-            w = min(width - x, w)
-            h = min(height - y, h)
+            w = min(image.shape[1] - x, w)
+            h = min(image.shape[0] - y, h)
 
-            if w <= 0 or h <= 0:
-                # Skip invalid or out-of-bounds ROI
-                continue
-
-            # Apply Gaussian blur to the valid ROI
-            image[y:y+h, x:x+w] = cv.GaussianBlur(image[y:y+h, x:x+w], (99, 99), 30)
+            # Extract the ROI and apply the blur
+            roi = image[y:y+h, x:x+w]
+            if roi.size > 0:  # Ensure the ROI is valid
+                kernel_size = max(1, self.blur_intensity * 10 + 1)  # Scale kernel size
+                blurred_roi = cv.GaussianBlur(roi, (kernel_size, kernel_size), 999)
+                image[y:y+h, x:x+w] = blurred_roi
 
         return image
 
@@ -283,6 +306,18 @@ class YuNetBlurGUI:
         new_w, new_h = int(w * ratio), int(h * ratio)
         new_x, new_y = center_x - new_w // 2, center_y - new_h // 2
         return new_x, new_y, new_w, new_h
+
+    def update_blur_intensity(self, value):
+        """
+        Updates the blur intensity dynamically.
+
+        Parameters
+        ----------
+        value : str
+            The new blur intensity value as a string from the slider.
+        """
+        self.blur_intensity = int(float(value))
+        self.blur_value_label.config(text=f"Blur Intensity: {self.blur_intensity}")
 
     def exit_fullscreen(self, event=None):
         """
