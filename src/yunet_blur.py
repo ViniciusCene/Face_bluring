@@ -23,7 +23,7 @@ class YuNetBlurGUI:
         self.cap = None
         self.model = None
         self.running = False
-        self.conf_threshold = 0.45  # Default confidence threshold
+        self.conf_threshold = 0.99  # Default confidence threshold
         self.video_writer = None
 
         # GUI Components
@@ -78,8 +78,9 @@ class YuNetBlurGUI:
             value = float(self.threshold_input.get())
             if 0.1 <= value <= 1.0:
                 self.conf_threshold = value
+                # Update the model's threshold dynamically if the model exists
                 if self.model:
-                    self.model.setConfThreshold(self.conf_threshold)
+                    self.model._confThreshold = self.conf_threshold
             else:
                 self.show_error("Value must be between 0.1 and 1.")
         except ValueError:
@@ -107,9 +108,6 @@ class YuNetBlurGUI:
         """
         self.cap = cv.VideoCapture(0)
 
-        # Initialize the YuNet model
-        self.model = self.load_yunet_model()
-
         # Configure video writer for saving output
         fourcc = cv.VideoWriter_fourcc(*"XVID")
         frame_width = int(self.cap.get(cv.CAP_PROP_FRAME_WIDTH))
@@ -122,6 +120,9 @@ class YuNetBlurGUI:
             ret, frame = self.cap.read()
             if not ret:
                 break
+
+            # Dynamically reinitialize the YuNet model with the updated threshold
+            self.model = self.load_yunet_model()
 
             # Resize frame to match model input size
             input_size = (320, 320)
