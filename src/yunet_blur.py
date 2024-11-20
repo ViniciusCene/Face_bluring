@@ -23,7 +23,7 @@ class YuNetBlurGUI:
         self.cap = None
         self.model = None
         self.running = False
-        self.conf_threshold = 0.99  # Default confidence threshold
+        self.conf_threshold = 0.45  # Default confidence threshold
         self.video_writer = None
 
         # GUI Components
@@ -38,15 +38,20 @@ class YuNetBlurGUI:
         )
         self.start_button.pack(pady=10)
 
-        # Confidence Threshold Input
-        self.threshold_label = ttk.Label(root, text="Confidence Threshold (0.1 - 1):")
+        # Confidence Threshold Slider
+        self.threshold_label = ttk.Label(root, text="Confidence Threshold:")
         self.threshold_label.pack(pady=5)
-        self.threshold_input = ttk.Entry(root, bootstyle="info", width=10)
-        self.threshold_input.insert(0, str(self.conf_threshold))  # Set default value
-        self.threshold_input.pack(pady=5)
+        self.threshold_slider = ttk.Scale(
+            root, from_=0.1, to=1.0, value=self.conf_threshold, length=400,
+            command=self.update_threshold, orient=HORIZONTAL, bootstyle="info"
+        )
+        self.threshold_slider.pack(pady=5)
 
-        # Validate threshold input
-        self.threshold_input.bind("<Return>", self.update_threshold)
+        # Real-time numeric display for threshold value
+        self.threshold_value_label = ttk.Label(
+            root, text=f"Current Value: {self.conf_threshold:.2f}", bootstyle="info"
+        )
+        self.threshold_value_label.pack(pady=5)
 
         self.video_thread = None
 
@@ -65,26 +70,19 @@ class YuNetBlurGUI:
             self.video_thread = threading.Thread(target=self.video_processing)
             self.video_thread.start()
 
-    def update_threshold(self, event=None):
+    def update_threshold(self, value):
         """
-        Updates the confidence threshold for the YuNet model from user input.
+        Updates the confidence threshold for the YuNet model dynamically.
 
         Parameters
         ----------
-        event : Event, optional
-            The event that triggered this function (e.g., pressing Enter).
+        value : str
+            The new threshold value as a string from the slider.
         """
-        try:
-            value = float(self.threshold_input.get())
-            if 0.1 <= value <= 1.0:
-                self.conf_threshold = value
-                # Update the model's threshold dynamically if the model exists
-                if self.model:
-                    self.model._confThreshold = self.conf_threshold
-            else:
-                self.show_error("Value must be between 0.1 and 1.")
-        except ValueError:
-            self.show_error("Invalid input. Enter a number between 0.1 and 1.")
+        self.conf_threshold = float(value)
+        self.threshold_value_label.config(text=f"Current Threshold Value: {self.conf_threshold:.2f}")
+        if self.model:
+            self.model._confThreshold = self.conf_threshold
 
     def show_error(self, message):
         """
