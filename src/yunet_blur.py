@@ -19,6 +19,9 @@ class YuNetBlurGUI:
         self.root = root
         self.root.title("YuNet Automatic Face Blurring")
 
+        # Set the window to full-screen mode
+        self.root.attributes('-fullscreen', True)
+
         # Video variables
         self.cap = None
         self.model = None
@@ -26,9 +29,15 @@ class YuNetBlurGUI:
         self.conf_threshold = 0.45  # Default confidence threshold
         self.video_writer = None
 
+        # Get screen size and calculate canvas dimensions (80% of the screen)
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        self.canvas_width = int(screen_width * 0.8)
+        self.canvas_height = int(screen_height * 0.8)
+
         # GUI Components
         # Canvas for video display
-        self.canvas = ttk.Canvas(root, width=640, height=480)
+        self.canvas = ttk.Canvas(root, width=self.canvas_width, height=self.canvas_height)
         self.canvas.pack(fill="both", expand=True)
 
         # Start/Stop Button with enhanced styling
@@ -54,6 +63,9 @@ class YuNetBlurGUI:
         self.threshold_value_label.pack(pady=5)
 
         self.video_thread = None
+
+        # Bind Esc key to exit full-screen mode
+        self.root.bind("<Escape>", self.exit_fullscreen)
 
     def toggle_video_processing(self):
         """
@@ -122,21 +134,20 @@ class YuNetBlurGUI:
             # Dynamically reinitialize the YuNet model with the updated threshold
             self.model = self.load_yunet_model()
 
-            # Resize frame to match model input size
-            input_size = (320, 320)
-            resized_frame = cv.resize(frame, input_size)
+            # Resize frame to match the canvas dimensions
+            resized_frame = cv.resize(frame, (self.canvas_width, self.canvas_height))
 
             # Run inference
-            results = self.model.infer(resized_frame)
+            results = self.model.infer(cv.resize(frame, (320, 320)))
 
             # Resize results back to original frame dimensions
-            scale_x = frame.shape[1] / input_size[0]
-            scale_y = frame.shape[0] / input_size[1]
+            scale_x = resized_frame.shape[1] / 320
+            scale_y = resized_frame.shape[0] / 320
             if results is not None and results.size > 0:
                 results[:, :4] *= [scale_x, scale_y, scale_x, scale_y]
 
             # Visualize results
-            processed_frame = self.visualize(frame, results)
+            processed_frame = self.visualize(resized_frame, results)
 
             # Write processed frame to the video file
             self.video_writer.write(processed_frame)
@@ -237,6 +248,12 @@ class YuNetBlurGUI:
         new_w, new_h = int(w * ratio), int(h * ratio)
         new_x, new_y = center_x - new_w // 2, center_y - new_h // 2
         return new_x, new_y, new_w, new_h
+
+    def exit_fullscreen(self, event=None):
+        """
+        Exits full-screen mode.
+        """
+        self.root.attributes('-fullscreen', False)
 
 
 def main():
