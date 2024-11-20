@@ -75,6 +75,17 @@ class YuNetBlurGUI:
         )
         self.fullscreen_button.grid(row=0, column=1, padx=10)
 
+        # Exit Program Button
+        self.exit_button = ttk.Button(
+            self.button_frame,
+            text="Exit Program",
+            command=self.exit_program,
+            bootstyle="danger-outline",
+            padding=10,
+            width=20
+        )
+        self.exit_button.grid(row=0, column=2, padx=10)
+
         # Frame for sliders
         self.slider_frame = ttk.Frame(root, padding=5)
         self.slider_frame.pack(fill="both", expand=False)
@@ -152,17 +163,24 @@ class YuNetBlurGUI:
     
     def toggle_video_processing(self):
         """
-        Starts or stops the video processing based on the current state.
+        Toggles video processing on/off and updates the Start/Stop button text.
         """
         if self.running:
+            # Stop video processing
             self.running = False
             self.start_button.config(text="Start", bootstyle="success-outline")
+
+            # Release resources
+            if self.cap:
+                self.cap.release()
             if self.video_writer:
                 self.video_writer.release()
+
         else:
+            # Start video processing
             self.running = True
             self.start_button.config(text="Stop", bootstyle="danger-outline")
-            self.video_thread = threading.Thread(target=self.video_processing)
+            self.video_thread = threading.Thread(target=self.video_processing, daemon=True)
             self.video_thread.start()
 
     def update_threshold(self, value):
@@ -384,6 +402,18 @@ class YuNetBlurGUI:
         Exits full-screen mode.
         """
         self.root.attributes('-fullscreen', False)
+
+    def exit_program(self):
+        """
+        Stops video processing (if active) and exits the program.
+        """
+        if self.running:
+            # Simulate a click on the Start/Stop button to stop video acquisition
+            self.toggle_video_processing()
+
+        # Close the GUI window
+        self.root.quit()
+        self.root.destroy()
 
 
 def main():
