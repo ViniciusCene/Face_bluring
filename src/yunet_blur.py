@@ -29,6 +29,7 @@ class YuNetBlurGUI:
         self.running = False
         self.conf_threshold = 0.45  # Default confidence threshold
         self.blur_intensity = 5     # Default blur intensity
+        self.blur_area = 150        # Default blurring area (percentage)
         self.video_writer = None
 
         # Get screen size
@@ -36,7 +37,7 @@ class YuNetBlurGUI:
         screen_height = self.root.winfo_screenheight()
 
         # Reserve space for the controls (buttons, slider, etc.)
-        control_height = 150  # Adjust this value if needed
+        control_height = 200  # Adjust this value if needed
         self.canvas_width = int(screen_width * 0.9)
         self.canvas_height = int((screen_height - control_height) * 0.9)
 
@@ -92,6 +93,19 @@ class YuNetBlurGUI:
             self.slider_frame, text=f"Blur Intensity: {self.blur_intensity}", bootstyle="info"
         )
         self.blur_value_label.grid(row=2, column=1, padx=5)
+
+        # Blurring Area Slider
+        self.blur_area_label = ttk.Label(self.slider_frame, text="Blurring Area (100% to 200%):")
+        self.blur_area_label.grid(row=0, column=2, padx=5)
+        self.blur_area_slider = ttk.Scale(
+            self.slider_frame, from_=100, to=200, value=self.blur_area, length=200,
+            command=self.update_blur_area, orient=HORIZONTAL, bootstyle="info"
+        )
+        self.blur_area_slider.grid(row=1, column=2, padx=5)
+        self.blur_area_value_label = ttk.Label(
+            self.slider_frame, text=f"Blurring Area: {self.blur_area}%", bootstyle="info"
+        )
+        self.blur_area_value_label.grid(row=2, column=2, padx=5)
 
         self.video_thread = None
 
@@ -222,11 +236,6 @@ class YuNetBlurGUI:
         if self.video_writer:
             self.video_writer.release()  # Ensure the writer is properly closed
 
-        # Debug: Print final average FPS
-        if frame_times:
-            avg_fps = 1 / (sum(frame_times) / len(frame_times))
-            print(f"Final Average FPS: {avg_fps:.2f}")
-
     def load_yunet_model(self):
         """
         Loads the YuNet model with the current confidence threshold.
@@ -267,7 +276,8 @@ class YuNetBlurGUI:
 
         for det in results:
             roi_x0, roi_y0, roi_w, roi_h = det[:4].astype(int)
-            x, y, w, h = self.scale_roi(roi_x0, roi_y0, roi_w, roi_h, ratio=1.5)
+            scale_ratio = self.blur_area / 100.0  # Convert percentage to ratio
+            x, y, w, h = self.scale_roi(roi_x0, roi_y0, roi_w, roi_h, ratio=scale_ratio)
 
             # Ensure ROI is within bounds
             x = max(0, x)
@@ -318,6 +328,18 @@ class YuNetBlurGUI:
         """
         self.blur_intensity = int(float(value))
         self.blur_value_label.config(text=f"Blur Intensity: {self.blur_intensity}")
+
+    def update_blur_area(self, value):
+        """
+        Updates the blurring area dynamically.
+
+        Parameters
+        ----------
+        value : str
+            The new blurring area value as a string from the slider.
+        """
+        self.blur_area = int(float(value))
+        self.blur_area_value_label.config(text=f"Blurring Area: {self.blur_area}%")
 
     def exit_fullscreen(self, event=None):
         """
