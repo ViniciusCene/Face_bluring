@@ -4,6 +4,7 @@ from PIL import Image, ImageTk
 import cv2 as cv
 import threading
 import os
+import time
 
 
 class YuNetBlurGUI:
@@ -29,16 +30,31 @@ class YuNetBlurGUI:
         self.conf_threshold = 0.45  # Default confidence threshold
         self.video_writer = None
 
-        # Get screen size and calculate canvas dimensions (80% of the screen)
+        # Get screen size
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
-        self.canvas_width = int(screen_width * 0.8)
-        self.canvas_height = int(screen_height * 0.8)
+
+        # Reserve space for the controls (buttons, slider, etc.)
+        control_height = 100  # Adjust this value if needed
+        self.canvas_width = int(screen_width * 0.9)
+        self.canvas_height = int((screen_height - control_height) * 0.9)
 
         # GUI Components
+        # Frame for canvas with padding and borders
+        self.canvas_frame = ttk.Frame(
+            root, padding=10, bootstyle="secondary"  # Add padding and style
+        )
+        self.canvas_frame.pack(fill="both", expand=False, pady=10)
+
         # Canvas for video display
-        self.canvas = ttk.Canvas(root, width=self.canvas_width, height=self.canvas_height)
-        self.canvas.pack(fill="both", expand=True)
+        self.canvas = ttk.Canvas(
+            self.canvas_frame,
+            width=self.canvas_width,
+            height=self.canvas_height,
+            relief="solid",  # Add border to the canvas
+            borderwidth=2,
+        )
+        self.canvas.pack()
 
         # Start/Stop Button with enhanced styling
         self.start_button = ttk.Button(
@@ -118,15 +134,17 @@ class YuNetBlurGUI:
         """
         self.cap = cv.VideoCapture(0)
 
-        # Configure video writer for saving output
+        # Measure frame processing times
+        frame_times = []
+
+        # Placeholder for video writer and dynamic FPS
         fourcc = cv.VideoWriter_fourcc(*"XVID")
-        frame_width = int(self.cap.get(cv.CAP_PROP_FRAME_WIDTH))
-        frame_height = int(self.cap.get(cv.CAP_PROP_FRAME_HEIGHT))
-        self.video_writer = cv.VideoWriter(
-            "output_blurred.avi", fourcc, 20.0, (frame_width, frame_height)
-        )
+        self.video_writer = None
+        actual_fps = None
 
         while self.running:
+            start_time = time.time()  # Start time of frame processing
+
             ret, frame = self.cap.read()
             if not ret:
                 break
@@ -140,7 +158,7 @@ class YuNetBlurGUI:
             # Run inference
             results = self.model.infer(cv.resize(frame, (320, 320)))
 
-            # Resize results back to original frame dimensions
+            # Resize results back to the resized frame dimensions
             scale_x = resized_frame.shape[1] / 320
             scale_y = resized_frame.shape[0] / 320
             if results is not None and results.size > 0:
@@ -149,8 +167,18 @@ class YuNetBlurGUI:
             # Visualize results
             processed_frame = self.visualize(resized_frame, results)
 
+            # Initialize the video writer with the actual FPS (after a few frames)
+            if self.video_writer is None and len(frame_times) > 10:
+                actual_fps = 1 / (sum(frame_times) / len(frame_times))  # Average FPS
+                actual_fps = min(max(int(actual_fps), 1), 30)  # Clamp FPS
+                self.video_writer = cv.VideoWriter(
+                    "output_blurred.avi", fourcc, actual_fps,
+                    (self.canvas_width, self.canvas_height)
+                )
+
             # Write processed frame to the video file
-            self.video_writer.write(processed_frame)
+            if self.video_writer:
+                self.video_writer.write(processed_frame)
 
             # Convert BGR to RGB for proper color display
             frame_rgb = cv.cvtColor(processed_frame, cv.COLOR_BGR2RGB)
@@ -162,9 +190,16 @@ class YuNetBlurGUI:
             # Display the image in the Tkinter canvas
             self.canvas.create_image(0, 0, anchor="nw", image=image_tk)
             self.canvas.image_tk = image_tk  # Keep a reference to prevent garbage collection
-            self.root.update_idletasks()
+
+            # Calculate frame processing time
+            frame_time = time.time() - start_time
+            frame_times.append(frame_time)
+            if len(frame_times) > 100:  # Keep the last 100 frame times
+                frame_times.pop(0)
 
         self.cap.release()
+        if self.video_writer:
+            self.video_writer.release()  # Ensure the writer is properly closed
 
     def load_yunet_model(self):
         """
