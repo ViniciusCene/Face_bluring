@@ -1,10 +1,9 @@
-import os
-import threading
-import cv2 as cv
-import numpy as np
-from yunet import YuNet
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
 from PIL import Image, ImageTk
-from tkinter import Tk, Button, Scale, Label, HORIZONTAL, Canvas, PhotoImage
+import cv2 as cv
+import threading
+import os
 
 
 class YuNetBlurGUI:
@@ -14,8 +13,8 @@ class YuNetBlurGUI:
 
         Parameters
         ----------
-        root : Tk
-            The root window of the Tkinter GUI.
+        root : ttk.Window
+            The root window of the ttkbootstrap GUI.
         """
         self.root = root
         self.root.title("YuNet Automatic Face Blurring")
@@ -24,26 +23,30 @@ class YuNetBlurGUI:
         self.cap = None
         self.model = None
         self.running = False
-        self.conf_threshold = 0.45
+        self.conf_threshold = 0.45  # Default confidence threshold
+        self.video_writer = None
 
         # GUI Components
-        self.start_button = Button(
-            root, text="Start", command=self.toggle_video_processing
+        # Canvas for video display
+        self.canvas = ttk.Canvas(root, width=640, height=480)
+        self.canvas.pack(fill="both", expand=True)
+
+        # Start/Stop Button with enhanced styling
+        self.start_button = ttk.Button(
+            root, text="Start", command=self.toggle_video_processing,
+            bootstyle="success-outline", padding=10, width=20
         )
-        self.start_button.pack()
+        self.start_button.pack(pady=10)
 
-        self.threshold_label = Label(root, text="Confidence Threshold:")
-        self.threshold_label.pack()
+        # Confidence Threshold Input
+        self.threshold_label = ttk.Label(root, text="Confidence Threshold (0.1 - 1):")
+        self.threshold_label.pack(pady=5)
+        self.threshold_input = ttk.Entry(root, bootstyle="info", width=10)
+        self.threshold_input.insert(0, str(self.conf_threshold))  # Set default value
+        self.threshold_input.pack(pady=5)
 
-        self.threshold_slider = Scale(
-            root, from_=0.1, to=1.0, resolution=0.01, orient=HORIZONTAL,
-            command=self.update_threshold
-        )
-        self.threshold_slider.set(self.conf_threshold)
-        self.threshold_slider.pack()
-
-        self.canvas = Canvas(root, width=640, height=480)
-        self.canvas.pack()
+        # Validate threshold input
+        self.threshold_input.bind("<Return>", self.update_threshold)
 
         self.video_thread = None
 
@@ -53,37 +56,61 @@ class YuNetBlurGUI:
         """
         if self.running:
             self.running = False
-            self.start_button.config(text="Start")
-            # Ensure video_writer is released when stopping
+            self.start_button.config(text="Start", bootstyle="success-outline")
             if self.video_writer:
                 self.video_writer.release()
         else:
             self.running = True
-            self.start_button.config(text="Stop")
+            self.start_button.config(text="Stop", bootstyle="danger-outline")
             self.video_thread = threading.Thread(target=self.video_processing)
             self.video_thread.start()
 
-    def update_threshold(self, value):
+    def update_threshold(self, event=None):
         """
-        Updates the confidence threshold for the YuNet model.
+        Updates the confidence threshold for the YuNet model from user input.
 
         Parameters
         ----------
-        value : str
-            The new threshold value as a string (from the slider).
+        event : Event, optional
+            The event that triggered this function (e.g., pressing Enter).
         """
-        self.conf_threshold = float(value)
-        if self.model:
-            self.model.setConfThreshold(self.conf_threshold)
+        try:
+            value = float(self.threshold_input.get())
+            if 0.1 <= value <= 1.0:
+                self.conf_threshold = value
+                if self.model:
+                    self.model.setConfThreshold(self.conf_threshold)
+            else:
+                self.show_error("Value must be between 0.1 and 1.")
+        except ValueError:
+            self.show_error("Invalid input. Enter a number between 0.1 and 1.")
+
+    def show_error(self, message):
+        """
+        Displays an error message in a popup window.
+
+        Parameters
+        ----------
+        message : str
+            The error message to display.
+        """
+        error_window = ttk.Window(themename="flatly")
+        error_window.title("Error")
+        error_label = ttk.Label(error_window, text=message, bootstyle="danger")
+        error_label.pack(pady=10)
+        ttk.Button(error_window, text="OK", command=error_window.destroy).pack(pady=5)
+        error_window.mainloop()
 
     def video_processing(self):
         """
         Handles real-time video processing and updates the GUI.
         """
         self.cap = cv.VideoCapture(0)
+
+        # Initialize the YuNet model
         self.model = self.load_yunet_model()
 
-        # Configure video writer
+        # Configure video writer for saving output
         fourcc = cv.VideoWriter_fourcc(*"XVID")
         frame_width = int(self.cap.get(cv.CAP_PROP_FRAME_WIDTH))
         frame_height = int(self.cap.get(cv.CAP_PROP_FRAME_HEIGHT))
@@ -124,11 +151,10 @@ class YuNetBlurGUI:
 
             # Display the image in the Tkinter canvas
             self.canvas.create_image(0, 0, anchor="nw", image=image_tk)
-            self.canvas.image_tk = image_tk  # Keep a reference to avoid garbage collection
+            self.canvas.image_tk = image_tk  # Keep a reference to prevent garbage collection
             self.root.update_idletasks()
 
         self.cap.release()
-        self.video_writer.release()
 
     def load_yunet_model(self):
         """
@@ -143,6 +169,7 @@ class YuNetBlurGUI:
             os.path.dirname(__file__),
             "trained_models/yunet/face_detection_yunet_2023mar.onnx"
         )
+        from yunet import YuNet
         return YuNet(
             modelPath=model_path, inputSize=[320, 320], confThreshold=self.conf_threshold,
             nmsThreshold=0.3, topK=5000
@@ -217,7 +244,7 @@ def main():
     """
     Main function to start the GUI.
     """
-    root = Tk()
+    root = ttk.Window(themename="flatly")  # Choose a clean theme
     app = YuNetBlurGUI(root)
     root.mainloop()
 
