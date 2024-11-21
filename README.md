@@ -1,87 +1,107 @@
-
 # YuNet Automatic Face Blurring
 
-YuNet Automatic Face Blurring is a real-time face-blurring application leveraging the YuNet model from the OpenCV Zoo. This tool detects faces in a video feed and applies a Gaussian blur to conceal them, making it useful for privacy-preserving applications such as video processing, surveillance, and content creation.
+This project provides real-time **automatic face blurring** using the **YuNet** face detection model hosted in the **OpenCV Zoo**. It features a user-friendly GUI for adjusting blurring parameters and managing video acquisition settings.
 
-## Table of Contents
-
-- [Features](#features)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Dependencies](#dependencies)
-- [Folder Structure](#folder-structure)
-- [License](#license)
 
 ## Features
 
-- **Real-Time Detection**: Detects faces in real-time from the video feed using YuNet.
-- **Automatic Blurring**: Applies Gaussian blur to detected faces.
-- **Customizable Parameters**: Allows adjustment of detection and blurring parameters.
-- **Live FPS Display**: Shows frames-per-second (FPS) in the video output.
+### Real-Time Face Blurring
+- Detects faces using the **YuNet** model and applies a Gaussian blur to the detected regions.
+- Adjustable **confidence threshold** for face detection.
+- Scalable region of interest (ROI) for blurring.
+- Configurable blur intensity.
+
+### Interactive GUI
+The GUI offers the following controls:
+
+#### Buttons:
+1. **Start/Stop**: 
+   - **Start**: Begins video acquisition and processing.
+   - **Stop**: Halts video processing and releases resources.
+2. **Full Screen**:
+   - **Disable Full Screen** (default): The GUI opens in full-screen mode by default. Clicking this switches to a windowed mode.
+   - **Enable Full Screen**: Switches back to full-screen mode.
+3. **Eyes Visible**:
+   - Toggles the visibility of eyes in the blurred regions.
+   - **ON**: Eyes remain unblurred while the rest of the face is blurred.
+   - **OFF**: Entire face is blurred.
+4. **Exit Program**:
+   - Stops video processing (if running) and exits the application.
+
+#### Sliders:
+1. **Confidence Threshold**:
+   - Adjusts the detection threshold for faces.
+   - Range: `0.1` to `1.0`.
+2. **Blur Intensity**:
+   - Configures the intensity of the Gaussian blur.
+   - Range: `1` to `20`.
+3. **Blurring Area**:
+   - Scales the ROI for blurring.
+   - Range: `100%` to `200%`.
+
+### Output
+- Displays real-time processed video with blurred faces.
+- Saves the video to a file (`output_blurred.avi`) upon exiting.
+
+## Project Structure
+
+```
+YuNet_Automatic_Face_Blurring/
+├── src/
+│   ├── yunet.py               # Implements YuNet face detection logic.
+│   ├── yunet_blur.py          # Main GUI application and video processing logic.
+│   └── trained_models/
+│       └── face_detection_yunet_2023mar.onnx  # Pre-trained YuNet model file.
+├── README.md                  # Project documentation.
+├── LICENSE                    # License file.
+```
 
 ## Installation
 
-### Prerequisites
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-username/YuNet_Automatic_Face_Blurring.git
+   cd YuNet_Automatic_Face_Blurring
+   ```
 
-Ensure you have Python 3.7 or higher installed. This project relies on the OpenCV library, which should be version 4.10.0 or higher for optimal compatibility.
+2. Install dependencies:
+   ```bash
+   pip install opencv-python opencv-python-headless ttkbootstrap numpy
+   ```
 
-### Steps
-
-1. Clone this repository:
-
-    ```bash
-    git clone https://github.com/yourusername/Face_blurring.git
-    cd Face_blurring
-    ```
-
-2. Install the required Python dependencies:
-
-    ```bash
-    python3 -m pip install --upgrade opencv-python
-    ```
-
-3. Ensure the YuNet model weights are in the `trained_models` directory within the `src` folder.
+3. Ensure the **YuNet** model file is present in the `trained_models` directory.
 
 ## Usage
 
-To run the real-time face blurring application, execute the `yunet_blur.py` file:
+1. Navigate to the `src` directory:
+   ```bash
+   cd src
+   ```
 
-```bash
-python3 src/yunet_blur.py
-```
+2. Run the application:
+   ```bash
+   python yunet_blur.py
+   ```
 
-This script will activate the webcam, apply face detection, and blur detected faces in real time. Press any key to stop the video feed and close the application.
+3. Interact with the GUI:
+   - Adjust sliders to configure the face detection and blurring parameters.
+   - Use the buttons to start/stop processing, toggle full-screen mode, enable/disable eye visibility, and exit the program.
 
-## Dependencies
+## How It Works
 
-This project relies on the following dependencies:
+- The **YuNet** model detects faces in real-time using the OpenCV `dnn` module.
+- Detected face regions are processed with a Gaussian blur to anonymize them.
+- The GUI allows dynamic adjustment of detection and blurring parameters without restarting the application.
 
-- **OpenCV** (4.10.0 or higher): Provides tools for image processing and computer vision.
-- **NumPy**: Used for numerical operations and array manipulation.
+## Screenshots
 
-To install these dependencies, run:
-
-```bash
-python3 -m pip install -r requirements.txt
-```
-
-*Note:* Ensure you have an internet connection for downloading the model weights from the OpenCV Zoo if not pre-downloaded.
-
-## Folder Structure
-
-The project is organized as follows:
-
-```
-Face_blurring/
-├── LICENSE
-├── README.md
-└── src/
-    ├── yunet.py           # YuNet model configuration file
-    ├── yunet_blur.py      # Main script for running real-time face blurring
-    └── trained_models/
-        └── face_detection_yunet_2023mar.onnx  # Pre-trained model weights for YuNet
-```
+*To be added here*
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+This project is licensed under the MIT License. See the `LICENSE` file for details.
+
+## Acknowledgments
+
+- **YuNet Model**: Shenzhen Institute of Artificial Intelligence and Robotics for Society.
+- **OpenCV Zoo**: Hosting and integration of pre-trained models.
