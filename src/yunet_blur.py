@@ -1,5 +1,6 @@
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
+from tkinter import Scale  # Import Scale for sliders
 from PIL import Image, ImageTk
 import cv2 as cv
 import threading
@@ -61,29 +62,44 @@ class YuNetBlurGUI:
         self.button_frame = ttk.Frame(root, padding=5)
         self.button_frame.pack(fill="both", expand=False)
 
-        # Start/Stop Button with enhanced styling
+        # Create a centered frame for buttons
+        self.button_frame = ttk.Frame(root, padding=10)
+        self.button_frame.pack(fill="x", pady=10)
+        self.button_frame.columnconfigure((0, 1, 2, 3), weight=1)  # Equal spacing for buttons
+
+        # Start/Stop Button
         self.start_button = ttk.Button(
-            self.button_frame, text="Start", command=self.toggle_video_processing,
-            bootstyle="success-outline", padding=10, width=20
+            self.button_frame,
+            text="Start",
+            command=self.toggle_video_processing,
+            bootstyle="success-outline",
+            padding=20,
+            width=30
         )
         self.start_button.grid(row=0, column=0, padx=10)
 
         # Full-Screen Toggle Button
         self.fullscreen_button = ttk.Button(
-            self.button_frame, text="Full Screen: OFF", command=self.toggle_fullscreen,
-            bootstyle="secondary-outline", padding=10, width=20
+            self.button_frame,
+            text="Disable Full Screen", 
+            command=self.toggle_fullscreen,
+            bootstyle="info-outline",
+            padding=20,
+            width=30
         )
         self.fullscreen_button.grid(row=0, column=1, padx=10)
 
+        # Initialize the eyes_visible state
+        self.eyes_visible = False  # Default state is OFF
+
         # Eyes Visible Toggle Button
-        self.eyes_visible = False  # Default state
         self.eyes_toggle_button = ttk.Button(
             self.button_frame,
-            text="Eyes Visible: OFF",
+            text="Eyes Visible: OFF",  # Default text
             command=self.toggle_eyes_visible,
             bootstyle="info-outline",
-            padding=10,
-            width=20
+            padding=20,
+            width=30
         )
         self.eyes_toggle_button.grid(row=0, column=2, padx=10)
 
@@ -93,53 +109,97 @@ class YuNetBlurGUI:
             text="Exit Program",
             command=self.exit_program,
             bootstyle="danger-outline",
-            padding=10,
-            width=20
+            padding=20,
+            width=30
         )
         self.exit_button.grid(row=0, column=3, padx=10)
 
-        # Frame for sliders
-        self.slider_frame = ttk.Frame(root, padding=5)
-        self.slider_frame.pack(fill="both", expand=False)
+        # Slider Frame with Borders
+        self.slider_frame = ttk.LabelFrame(root, text="Adjustments", padding=10, bootstyle="primary")
+        self.slider_frame.pack(fill="x", pady=10)
+
+        # Center the slider frame horizontally
+        self.slider_frame = ttk.Frame(root, padding=10)
+        self.slider_frame.pack(fill="x", pady=10)
+        self.slider_frame.columnconfigure((0, 1, 2), weight=1)  # Equal spacing for sliders
 
         # Confidence Threshold Slider
-        self.threshold_label = ttk.Label(self.slider_frame, text="Confidence Threshold:")
-        self.threshold_label.grid(row=0, column=0, padx=5)
+        self.threshold_label = ttk.Label(
+            self.slider_frame,
+            text="Confidence Threshold:",
+            font=("TkDefaultFont", 12, "bold")
+        )
+        self.threshold_label.grid(row=0, column=0, padx=10, sticky="ew")
+
         self.threshold_slider = ttk.Scale(
-            self.slider_frame, from_=0.1, to=1.0, value=self.conf_threshold, length=200,
-            command=self.update_threshold, orient=HORIZONTAL, bootstyle="info"
+            self.slider_frame,
+            from_=0.1, to=1.0,
+            value=self.conf_threshold,
+            length=300,  # Adjust width
+            command=self.update_threshold,
+            orient=HORIZONTAL,
+            bootstyle="info"
         )
-        self.threshold_slider.grid(row=1, column=0, padx=5)
+        self.threshold_slider.grid(row=1, column=0, padx=10, sticky="ew")
+
         self.threshold_value_label = ttk.Label(
-            self.slider_frame, text=f"Confidence: {self.conf_threshold:.2f}", bootstyle="info"
+            self.slider_frame,
+            text=f"Current: {self.conf_threshold:.2f}",
+            font=("TkDefaultFont", 10)  # Regular font
         )
-        self.threshold_value_label.grid(row=2, column=0, padx=5)
+        self.threshold_value_label.grid(row=2, column=0, padx=10, sticky="ew")
 
         # Blur Intensity Slider
-        self.blur_label = ttk.Label(self.slider_frame, text="Blur Intensity (1 to 20):")
-        self.blur_label.grid(row=0, column=1, padx=5)
+        self.blur_label = ttk.Label(
+            self.slider_frame,
+            text="Blur Intensity (1 to 20):",
+            font=("TkDefaultFont", 12, "bold")
+        )
+        self.blur_label.grid(row=0, column=1, padx=10, sticky="ew")
+
         self.blur_slider = ttk.Scale(
-            self.slider_frame, from_=1, to=20, value=self.blur_intensity, length=200,
-            command=self.update_blur_intensity, orient=HORIZONTAL, bootstyle="info"
+            self.slider_frame,
+            from_=1, to=20,
+            value=self.blur_intensity,
+            length=300,
+            command=self.update_blur_intensity,
+            orient=HORIZONTAL,
+            bootstyle="info"
         )
-        self.blur_slider.grid(row=1, column=1, padx=5)
+        self.blur_slider.grid(row=1, column=1, padx=10, sticky="ew")
+
         self.blur_value_label = ttk.Label(
-            self.slider_frame, text=f"Blur Intensity: {self.blur_intensity}", bootstyle="info"
+            self.slider_frame,
+            text=f"Current: {self.blur_intensity}",
+            font=("TkDefaultFont", 10)  # Regular font
         )
-        self.blur_value_label.grid(row=2, column=1, padx=5)
+        self.blur_value_label.grid(row=2, column=1, padx=10, sticky="ew")
 
         # Blurring Area Slider
-        self.blur_area_label = ttk.Label(self.slider_frame, text="Blurring Area (100% to 200%):")
-        self.blur_area_label.grid(row=0, column=2, padx=5)
+        self.blur_area_label = ttk.Label(
+            self.slider_frame,
+            text="Blurring Area (100% to 200%):",
+            font=("TkDefaultFont", 12, "bold")
+        )
+        self.blur_area_label.grid(row=0, column=2, padx=10, sticky="ew")
+
         self.blur_area_slider = ttk.Scale(
-            self.slider_frame, from_=100, to=200, value=self.blur_area, length=200,
-            command=self.update_blur_area, orient=HORIZONTAL, bootstyle="info"
+            self.slider_frame,
+            from_=100, to=200,
+            value=self.blur_area,
+            length=300,
+            command=self.update_blur_area,
+            orient=HORIZONTAL,
+            bootstyle="info"
         )
-        self.blur_area_slider.grid(row=1, column=2, padx=5)
+        self.blur_area_slider.grid(row=1, column=2, padx=10, sticky="ew")
+
         self.blur_area_value_label = ttk.Label(
-            self.slider_frame, text=f"Blurring Area: {self.blur_area}%", bootstyle="info"
+            self.slider_frame,
+            text=f"Current: {self.blur_area}%",
+            font=("TkDefaultFont", 10)  # Regular font
         )
-        self.blur_area_value_label.grid(row=2, column=2, padx=5)
+        self.blur_area_value_label.grid(row=2, column=2, padx=10, sticky="ew")
 
         self.video_thread = None
 
@@ -155,7 +215,7 @@ class YuNetBlurGUI:
             x_offset = (self.screen_width - window_width) // 2
             y_offset = (self.screen_height - window_height) // 2
             self.root.geometry(f"{window_width}x{window_height}+{x_offset}+{y_offset}")
-            self.fullscreen_button.config(text="Full Screen: ON")
+            self.fullscreen_button.config(text="Disable Full Screen")
 
             # Adjust canvas dimensions for windowed mode
             self.canvas_width = int(window_width * 0.9)
@@ -175,14 +235,22 @@ class YuNetBlurGUI:
 
     def toggle_eyes_visible(self):
         """
-        Toggles the state of the 'eyes_visible' functionality and updates the button text.
+        Toggles the state of the 'eyes_visible' functionality and updates the button text and style.
         """
-        self.eyes_visible = not self.eyes_visible
+        self.eyes_visible = not self.eyes_visible  # Toggle the state
+
+        # Update button text and style dynamically
         if self.eyes_visible:
-            self.eyes_toggle_button.config(text="Eyes Visible: ON", bootstyle="success-outline")
+            self.eyes_toggle_button.config(
+                text="Eyes Visible: ON",
+                bootstyle="info-outline"  
+            )
         else:
-            self.eyes_toggle_button.config(text="Eyes Visible: OFF", bootstyle="info-outline")
-        
+            self.eyes_toggle_button.config(
+                text="Eyes Visible: OFF",
+                bootstyle="info-outline" 
+            )
+
     def toggle_video_processing(self):
         """
         Toggles video processing on/off and updates the Start/Stop button text.
@@ -215,7 +283,8 @@ class YuNetBlurGUI:
             The new threshold value as a string from the slider.
         """
         self.conf_threshold = float(value)
-        self.threshold_value_label.config(text=f"Current Threshold Value: {self.conf_threshold:.2f}")
+        self.threshold_value_label.config(text=f"Current: {self.conf_threshold:.2f}")
+
         if self.model:
             self.model._confThreshold = self.conf_threshold
 
@@ -405,7 +474,7 @@ class YuNetBlurGUI:
             The new blur intensity value as a string from the slider.
         """
         self.blur_intensity = int(float(value))
-        self.blur_value_label.config(text=f"Blur Intensity: {self.blur_intensity}")
+        self.blur_value_label.config(text=f"Current: {self.blur_intensity}")
 
     def update_blur_area(self, value):
         """
@@ -417,7 +486,7 @@ class YuNetBlurGUI:
             The new blurring area value as a string from the slider.
         """
         self.blur_area = int(float(value))
-        self.blur_area_value_label.config(text=f"Blurring Area: {self.blur_area}%")
+        self.blur_area_value_label.config(text=f"Current: {self.blur_area}%")
 
     def exit_fullscreen(self, event=None):
         """
