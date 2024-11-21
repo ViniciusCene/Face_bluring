@@ -1,9 +1,11 @@
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
+from tkinter import Scale  # Import Scale for sliders
 from PIL import Image, ImageTk
 import cv2 as cv
 import threading
 import os
+import time
 
 
 class YuNetBlurGUI:
@@ -19,71 +21,272 @@ class YuNetBlurGUI:
         self.root = root
         self.root.title("YuNet Automatic Face Blurring")
 
+        # Set the window to full-screen mode by default
+        self.is_fullscreen = True
+        self.root.attributes('-fullscreen', True)
+
         # Video variables
         self.cap = None
         self.model = None
         self.running = False
         self.conf_threshold = 0.45  # Default confidence threshold
+        self.blur_intensity = 5     # Default blur intensity
+        self.blur_area = 150        # Default blurring area (percentage)
         self.video_writer = None
 
+        # Get screen size
+        self.screen_width = self.root.winfo_screenwidth()
+        self.screen_height = self.root.winfo_screenheight()
+
+        # Initial canvas dimensions
+        self.canvas_width = int(self.screen_width * 0.9)
+        self.canvas_height = int((self.screen_height - 200) * 0.8)
+
         # GUI Components
-        # Canvas for video display
-        self.canvas = ttk.Canvas(root, width=640, height=480)
-        self.canvas.pack(fill="both", expand=True)
-
-        # Start/Stop Button with enhanced styling
-        self.start_button = ttk.Button(
-            root, text="Start", command=self.toggle_video_processing,
-            bootstyle="success-outline", padding=10, width=20
+        # Frame for canvas with padding and borders
+        self.canvas_frame = ttk.Frame(
+            root, padding=10, bootstyle="secondary"
         )
-        self.start_button.pack(pady=10)
+        self.canvas_frame.pack(fill="both", expand=False, pady=10)
 
-        # Confidence Threshold Input
-        self.threshold_label = ttk.Label(root, text="Confidence Threshold (0.1 - 1):")
-        self.threshold_label.pack(pady=5)
-        self.threshold_input = ttk.Entry(root, bootstyle="info", width=10)
-        self.threshold_input.insert(0, str(self.conf_threshold))  # Set default value
-        self.threshold_input.pack(pady=5)
+        # Canvas for video display
+        self.canvas = ttk.Canvas(
+            self.canvas_frame,
+            width=self.canvas_width,
+            height=self.canvas_height,
+            relief="solid", borderwidth=2,
+        )
+        self.canvas.pack()
 
-        # Validate threshold input
-        self.threshold_input.bind("<Return>", self.update_threshold)
+        # Frame for buttons
+        self.button_frame = ttk.Frame(root, padding=5)
+        self.button_frame.pack(fill="both", expand=False)
+
+        # Create a centered frame for buttons
+        self.button_frame = ttk.Frame(root, padding=10)
+        self.button_frame.pack(fill="x", pady=10)
+        self.button_frame.columnconfigure((0, 1, 2, 3), weight=1)  # Equal spacing for buttons
+
+        # Start/Stop Button
+        self.start_button = ttk.Button(
+            self.button_frame,
+            text="Start",
+            command=self.toggle_video_processing,
+            bootstyle="success-outline",
+            padding=20,
+            width=30
+        )
+        self.start_button.grid(row=0, column=0, padx=10)
+
+        # Full-Screen Toggle Button
+        self.fullscreen_button = ttk.Button(
+            self.button_frame,
+            text="Disable Full Screen", 
+            command=self.toggle_fullscreen,
+            bootstyle="info-outline",
+            padding=20,
+            width=30
+        )
+        self.fullscreen_button.grid(row=0, column=1, padx=10)
+
+        # Initialize the eyes_visible state
+        self.eyes_visible = False  # Default state is OFF
+
+        # Eyes Visible Toggle Button
+        self.eyes_toggle_button = ttk.Button(
+            self.button_frame,
+            text="Eyes Visible: OFF",  # Default text
+            command=self.toggle_eyes_visible,
+            bootstyle="info-outline",
+            padding=20,
+            width=30
+        )
+        self.eyes_toggle_button.grid(row=0, column=2, padx=10)
+
+        # Exit Program Button
+        self.exit_button = ttk.Button(
+            self.button_frame,
+            text="Exit Program",
+            command=self.exit_program,
+            bootstyle="danger-outline",
+            padding=20,
+            width=30
+        )
+        self.exit_button.grid(row=0, column=3, padx=10)
+
+        # Slider Frame with Borders
+        self.slider_frame = ttk.LabelFrame(root, text="Adjustments", padding=10, bootstyle="primary")
+        self.slider_frame.pack(fill="x", pady=10)
+
+        # Center the slider frame horizontally
+        self.slider_frame = ttk.Frame(root, padding=10)
+        self.slider_frame.pack(fill="x", pady=10)
+        self.slider_frame.columnconfigure((0, 1, 2), weight=1)  # Equal spacing for sliders
+
+        # Confidence Threshold Slider
+        self.threshold_label = ttk.Label(
+            self.slider_frame,
+            text="Confidence Threshold:",
+            font=("TkDefaultFont", 12, "bold")
+        )
+        self.threshold_label.grid(row=0, column=0, padx=10, sticky="ew")
+
+        self.threshold_slider = ttk.Scale(
+            self.slider_frame,
+            from_=0.1, to=1.0,
+            value=self.conf_threshold,
+            length=300,  # Adjust width
+            command=self.update_threshold,
+            orient=HORIZONTAL,
+            bootstyle="info"
+        )
+        self.threshold_slider.grid(row=1, column=0, padx=10, sticky="ew")
+
+        self.threshold_value_label = ttk.Label(
+            self.slider_frame,
+            text=f"Current: {self.conf_threshold:.2f}",
+            font=("TkDefaultFont", 10)  # Regular font
+        )
+        self.threshold_value_label.grid(row=2, column=0, padx=10, sticky="ew")
+
+        # Blur Intensity Slider
+        self.blur_label = ttk.Label(
+            self.slider_frame,
+            text="Blur Intensity (1 to 20):",
+            font=("TkDefaultFont", 12, "bold")
+        )
+        self.blur_label.grid(row=0, column=1, padx=10, sticky="ew")
+
+        self.blur_slider = ttk.Scale(
+            self.slider_frame,
+            from_=1, to=20,
+            value=self.blur_intensity,
+            length=300,
+            command=self.update_blur_intensity,
+            orient=HORIZONTAL,
+            bootstyle="info"
+        )
+        self.blur_slider.grid(row=1, column=1, padx=10, sticky="ew")
+
+        self.blur_value_label = ttk.Label(
+            self.slider_frame,
+            text=f"Current: {self.blur_intensity}",
+            font=("TkDefaultFont", 10)  # Regular font
+        )
+        self.blur_value_label.grid(row=2, column=1, padx=10, sticky="ew")
+
+        # Blurring Area Slider
+        self.blur_area_label = ttk.Label(
+            self.slider_frame,
+            text="Blurring Area (100% to 200%):",
+            font=("TkDefaultFont", 12, "bold")
+        )
+        self.blur_area_label.grid(row=0, column=2, padx=10, sticky="ew")
+
+        self.blur_area_slider = ttk.Scale(
+            self.slider_frame,
+            from_=100, to=200,
+            value=self.blur_area,
+            length=300,
+            command=self.update_blur_area,
+            orient=HORIZONTAL,
+            bootstyle="info"
+        )
+        self.blur_area_slider.grid(row=1, column=2, padx=10, sticky="ew")
+
+        self.blur_area_value_label = ttk.Label(
+            self.slider_frame,
+            text=f"Current: {self.blur_area}%",
+            font=("TkDefaultFont", 10)  # Regular font
+        )
+        self.blur_area_value_label.grid(row=2, column=2, padx=10, sticky="ew")
 
         self.video_thread = None
 
+    def toggle_fullscreen(self):
+        """
+        Toggles between full-screen and windowed mode.
+        """
+        if self.is_fullscreen:
+            # Switch to windowed mode
+            self.root.attributes('-fullscreen', False)
+            window_width = int(self.screen_width * 0.75)
+            window_height = int(self.screen_height * 0.75)
+            x_offset = (self.screen_width - window_width) // 2
+            y_offset = (self.screen_height - window_height) // 2
+            self.root.geometry(f"{window_width}x{window_height}+{x_offset}+{y_offset}")
+            self.fullscreen_button.config(text="Disable Full Screen")
+
+            # Adjust canvas dimensions for windowed mode
+            self.canvas_width = int(window_width * 0.9)
+            self.canvas_height = int((window_height - 200) * 0.8)  # Reserve space for controls
+            self.canvas.config(width=self.canvas_width, height=self.canvas_height)
+        else:
+            # Switch to full-screen mode
+            self.root.attributes('-fullscreen', True)
+            self.fullscreen_button.config(text="Full Screen: OFF")
+
+            # Adjust canvas dimensions for full-screen mode
+            self.canvas_width = int(self.screen_width * 0.9)
+            self.canvas_height = int((self.screen_height - 200) * 0.8)  # Reserve space for controls
+            self.canvas.config(width=self.canvas_width, height=self.canvas_height)
+
+        self.is_fullscreen = not self.is_fullscreen
+
+    def toggle_eyes_visible(self):
+        """
+        Toggles the state of the 'eyes_visible' functionality and updates the button text and style.
+        """
+        self.eyes_visible = not self.eyes_visible  # Toggle the state
+
+        # Update button text and style dynamically
+        if self.eyes_visible:
+            self.eyes_toggle_button.config(
+                text="Eyes Visible: ON",
+                bootstyle="info-outline"  
+            )
+        else:
+            self.eyes_toggle_button.config(
+                text="Eyes Visible: OFF",
+                bootstyle="info-outline" 
+            )
+
     def toggle_video_processing(self):
         """
-        Starts or stops the video processing based on the current state.
+        Toggles video processing on/off and updates the Start/Stop button text.
         """
         if self.running:
+            # Stop video processing
             self.running = False
             self.start_button.config(text="Start", bootstyle="success-outline")
+
+            # Release resources
+            if self.cap:
+                self.cap.release()
             if self.video_writer:
                 self.video_writer.release()
+
         else:
+            # Start video processing
             self.running = True
             self.start_button.config(text="Stop", bootstyle="danger-outline")
-            self.video_thread = threading.Thread(target=self.video_processing)
+            self.video_thread = threading.Thread(target=self.video_processing, daemon=True)
             self.video_thread.start()
 
-    def update_threshold(self, event=None):
+    def update_threshold(self, value):
         """
-        Updates the confidence threshold for the YuNet model from user input.
+        Updates the confidence threshold for the YuNet model dynamically.
 
         Parameters
         ----------
-        event : Event, optional
-            The event that triggered this function (e.g., pressing Enter).
+        value : str
+            The new threshold value as a string from the slider.
         """
-        try:
-            value = float(self.threshold_input.get())
-            if 0.1 <= value <= 1.0:
-                self.conf_threshold = value
-                if self.model:
-                    self.model.setConfThreshold(self.conf_threshold)
-            else:
-                self.show_error("Value must be between 0.1 and 1.")
-        except ValueError:
-            self.show_error("Invalid input. Enter a number between 0.1 and 1.")
+        self.conf_threshold = float(value)
+        self.threshold_value_label.config(text=f"Current: {self.conf_threshold:.2f}")
+
+        if self.model:
+            self.model._confThreshold = self.conf_threshold
 
     def show_error(self, message):
         """
@@ -107,40 +310,57 @@ class YuNetBlurGUI:
         """
         self.cap = cv.VideoCapture(0)
 
-        # Initialize the YuNet model
-        self.model = self.load_yunet_model()
+        # Fallback FPS in case the camera does not provide it
+        fallback_fps = 20
+        fps = int(self.cap.get(cv.CAP_PROP_FPS))
+        fps = fps if fps > 0 else fallback_fps
 
-        # Configure video writer for saving output
+        # Configure video writer (initialized later when FPS is determined)
         fourcc = cv.VideoWriter_fourcc(*"XVID")
-        frame_width = int(self.cap.get(cv.CAP_PROP_FRAME_WIDTH))
-        frame_height = int(self.cap.get(cv.CAP_PROP_FRAME_HEIGHT))
-        self.video_writer = cv.VideoWriter(
-            "output_blurred.avi", fourcc, 20.0, (frame_width, frame_height)
-        )
+        frame_width = self.canvas_width
+        frame_height = self.canvas_height
+        self.video_writer = None
+
+        # Measure frame times
+        frame_times = []
 
         while self.running:
+            start_time = time.time()  # Start timing for FPS measurement
+
             ret, frame = self.cap.read()
             if not ret:
                 break
 
-            # Resize frame to match model input size
-            input_size = (320, 320)
-            resized_frame = cv.resize(frame, input_size)
+            # Resize frame to match the canvas dimensions
+            resized_frame = cv.resize(frame, (frame_width, frame_height))
 
             # Run inference
-            results = self.model.infer(resized_frame)
+            self.model = self.load_yunet_model()
+            results = self.model.infer(cv.resize(frame, (320, 320)))
 
-            # Resize results back to original frame dimensions
-            scale_x = frame.shape[1] / input_size[0]
-            scale_y = frame.shape[0] / input_size[1]
+            # Resize results back to the resized frame dimensions
+            scale_x = resized_frame.shape[1] / 320
+            scale_y = resized_frame.shape[0] / 320
             if results is not None and results.size > 0:
                 results[:, :4] *= [scale_x, scale_y, scale_x, scale_y]
 
             # Visualize results
-            processed_frame = self.visualize(frame, results)
+            processed_frame = self.visualize(resized_frame, results)
+
+            # Measure actual FPS dynamically after processing a few frames
+            if len(frame_times) > 10:
+                avg_fps = 1 / (sum(frame_times) / len(frame_times))
+                avg_fps = min(max(int(avg_fps), 1), 30)  # Clamp FPS between 1 and 30
+
+                # Initialize video writer with actual FPS if not already initialized
+                if self.video_writer is None:
+                    self.video_writer = cv.VideoWriter(
+                        "output_blurred.avi", fourcc, avg_fps, (frame_width, frame_height)
+                    )
 
             # Write processed frame to the video file
-            self.video_writer.write(processed_frame)
+            if self.video_writer:
+                self.video_writer.write(processed_frame)
 
             # Convert BGR to RGB for proper color display
             frame_rgb = cv.cvtColor(processed_frame, cv.COLOR_BGR2RGB)
@@ -152,9 +372,16 @@ class YuNetBlurGUI:
             # Display the image in the Tkinter canvas
             self.canvas.create_image(0, 0, anchor="nw", image=image_tk)
             self.canvas.image_tk = image_tk  # Keep a reference to prevent garbage collection
-            self.root.update_idletasks()
+
+            # Calculate frame processing time
+            frame_time = time.time() - start_time
+            frame_times.append(frame_time)
+            if len(frame_times) > 100:  # Keep the last 100 frame times
+                frame_times.pop(0)
 
         self.cap.release()
+        if self.video_writer:
+            self.video_writer.release()  # Ensure the writer is properly closed
 
     def load_yunet_model(self):
         """
@@ -194,25 +421,23 @@ class YuNetBlurGUI:
         if results is None or results.size == 0:
             return image
 
-        height, width = image.shape[:2]
-
         for det in results:
-            # Extract bounding box and scale it
             roi_x0, roi_y0, roi_w, roi_h = det[:4].astype(int)
-            x, y, w, h = self.scale_roi(roi_x0, roi_y0, roi_w, roi_h, ratio=1.5)
+            scale_ratio = self.blur_area / 100.0  # Convert percentage to ratio
+            x, y, w, h = self.scale_roi(roi_x0, roi_y0, roi_w, roi_h, ratio=scale_ratio)
 
-            # Ensure ROI is within frame bounds
+            # Ensure ROI is within bounds
             x = max(0, x)
             y = max(0, y)
-            w = min(width - x, w)
-            h = min(height - y, h)
+            w = min(image.shape[1] - x, w)
+            h = min(image.shape[0] - y, h)
 
-            if w <= 0 or h <= 0:
-                # Skip invalid or out-of-bounds ROI
-                continue
-
-            # Apply Gaussian blur to the valid ROI
-            image[y:y+h, x:x+w] = cv.GaussianBlur(image[y:y+h, x:x+w], (99, 99), 30)
+            # Extract the ROI and apply the blur
+            roi = image[y:y+h, x:x+w]
+            if roi.size > 0:  # Ensure the ROI is valid
+                kernel_size = max(1, self.blur_intensity * 10 + 1)  # Scale kernel size
+                blurred_roi = cv.GaussianBlur(roi, (kernel_size, kernel_size), 999)
+                image[y:y+h, x:x+w] = blurred_roi
 
         return image
 
@@ -238,6 +463,48 @@ class YuNetBlurGUI:
         new_w, new_h = int(w * ratio), int(h * ratio)
         new_x, new_y = center_x - new_w // 2, center_y - new_h // 2
         return new_x, new_y, new_w, new_h
+
+    def update_blur_intensity(self, value):
+        """
+        Updates the blur intensity dynamically.
+
+        Parameters
+        ----------
+        value : str
+            The new blur intensity value as a string from the slider.
+        """
+        self.blur_intensity = int(float(value))
+        self.blur_value_label.config(text=f"Current: {self.blur_intensity}")
+
+    def update_blur_area(self, value):
+        """
+        Updates the blurring area dynamically.
+
+        Parameters
+        ----------
+        value : str
+            The new blurring area value as a string from the slider.
+        """
+        self.blur_area = int(float(value))
+        self.blur_area_value_label.config(text=f"Current: {self.blur_area}%")
+
+    def exit_fullscreen(self, event=None):
+        """
+        Exits full-screen mode.
+        """
+        self.root.attributes('-fullscreen', False)
+
+    def exit_program(self):
+        """
+        Stops video processing (if active) and exits the program.
+        """
+        if self.running:
+            # Simulate a click on the Start/Stop button to stop video acquisition
+            self.toggle_video_processing()
+
+        # Close the GUI window
+        self.root.quit()
+        self.root.destroy()
 
 
 def main():
