@@ -316,7 +316,7 @@ class YuNetBlurGUI:
         fps = fps if fps > 0 else fallback_fps
 
         # Configure video writer (initialized later when FPS is determined)
-        fourcc = cv.VideoWriter_fourcc(*"XVID")
+        fourcc = cv.VideoWriter_fourcc(*"mp4v")
         frame_width = self.canvas_width
         frame_height = self.canvas_height
         self.video_writer = None
@@ -355,7 +355,7 @@ class YuNetBlurGUI:
                 # Initialize video writer with actual FPS if not already initialized
                 if self.video_writer is None:
                     self.video_writer = cv.VideoWriter(
-                        "output_blurred.avi", fourcc, avg_fps, (frame_width, frame_height)
+                        "output_blurred.mp4", fourcc, avg_fps, (frame_width, frame_height)
                     )
 
             # Write processed frame to the video file
