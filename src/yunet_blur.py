@@ -1,8 +1,10 @@
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from tkinter import Scale  # Import Scale for sliders
+from tkinter import filedialog
 from PIL import Image, ImageTk
 import cv2 as cv
+import numpy as np
 import threading
 import os
 import time
@@ -103,6 +105,17 @@ class YuNetBlurGUI:
         )
         self.eyes_toggle_button.grid(row=0, column=2, padx=10)
 
+        # Offline Processing Button
+        self.offline_processing_button = ttk.Button(
+            self.button_frame,
+            text="Offline Processing",
+            command=self.offline_processing,
+            bootstyle="warning-outline",
+            padding=20,
+            width=25
+        )
+        self.offline_processing_button.grid(row=0, column=3, padx=10)
+        
         # Exit Program Button
         self.exit_button = ttk.Button(
             self.button_frame,
@@ -112,7 +125,7 @@ class YuNetBlurGUI:
             padding=20,
             width=30
         )
-        self.exit_button.grid(row=0, column=3, padx=10)
+        self.exit_button.grid(row=0, column=4, padx=10)
 
         # Slider Frame with Borders
         self.slider_frame = ttk.LabelFrame(root, text="Adjustments", padding=10, bootstyle="primary")
@@ -251,6 +264,108 @@ class YuNetBlurGUI:
                 bootstyle="info-outline" 
             )
 
+    def offline_processing(self):
+        """
+        Allows the user to select a directory of video files for offline processing.
+        Processes each video file in the directory using the blurring algorithm.
+        """
+        # Ensure the YuNet model is loaded
+        if not self.model:
+            print("Loading YuNet model for offline processing...")
+            self.model = self.load_yunet_model()  # Explicitly load the model
+            self.model.setInputSize((320, 320))  # Set the input size for the model
+
+        # Open a directory selection dialog
+        directory = filedialog.askdirectory(title="Select Directory for Offline Processing")
+        if not directory:
+            print("No directory selected.")
+            return
+
+        # Create a "blurred files" folder in the selected directory
+        blurred_files_dir = os.path.join(directory, "blurred files")
+        os.makedirs(blurred_files_dir, exist_ok=True)
+
+        # List all video files in the directory
+        video_extensions = (".avi", ".mp4", ".mov", ".mkv")  # Supported formats
+        video_files = [f for f in os.listdir(directory) if f.lower().endswith(video_extensions)]
+
+        if not video_files:
+            print("No video files found in the selected directory.")
+            return
+
+        # Process each video file
+        for video_file in video_files:
+            input_path = os.path.join(directory, video_file)
+            output_path = os.path.join(
+                blurred_files_dir, f"{os.path.splitext(video_file)[0]}_blurred.mp4"
+            )
+
+            print(f"Processing: {video_file}")
+
+            # Replace existing file if already processed
+            if os.path.exists(output_path):
+                print(f"File already exists, replacing: {output_path}")
+
+            cap = cv.VideoCapture(input_path)
+            if not cap.isOpened():
+                print(f"Failed to open video file: {video_file}")
+                continue
+
+            fourcc = cv.VideoWriter_fourcc(*"mp4v")
+            frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+            frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+            fps = cap.get(cv.CAP_PROP_FPS)
+
+            out = cv.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
+
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                # Resize the frame to match the model's input size
+                resized_frame = cv.resize(frame, (320, 320))
+
+                # Process the resized frame using the model
+                results = self.model.infer(resized_frame)
+
+                # Map results back to the original frame size
+                scale_x = frame_width / 320
+                scale_y = frame_height / 320
+                scaled_results = []
+
+                if results is not None:
+                    for det in results:
+                        # Scale bounding box
+                        x, y, w, h = det[:4]
+                        x *= scale_x
+                        y *= scale_y
+                        w *= scale_x
+                        h *= scale_y
+
+                        # Scale landmarks
+                        landmarks = det[4:14].reshape(5, 2)
+                        landmarks[:, 0] *= scale_x
+                        landmarks[:, 1] *= scale_y
+
+                        # Append scaled results
+                        scaled_results.append([x, y, w, h, *landmarks.flatten(), det[-1]])
+
+                    scaled_results = np.array(scaled_results)
+
+                # Apply blurring to the original frame
+                processed_frame = self.visualize(frame, scaled_results)
+
+                out.write(processed_frame)
+
+            cap.release()
+            out.release()
+            print(f"{video_file} processed and saved to {output_path}")
+
+        # Final feedback
+        print("All done")
+        self.show_message_on_canvas("All done")
+    
     def toggle_video_processing(self):
         """
         Toggles video processing on/off and updates the Start/Stop button text.
@@ -303,6 +418,26 @@ class YuNetBlurGUI:
         error_label.pack(pady=10)
         ttk.Button(error_window, text="OK", command=error_window.destroy).pack(pady=5)
         error_window.mainloop()
+
+    def show_message_on_canvas(self, message, duration=2000):
+        """
+        Displays a temporary message on the canvas.
+        """
+        self.canvas.delete("all")
+        self.canvas.create_text(
+            self.canvas_width // 2,
+            self.canvas_height // 2,
+            text=message,
+            font=("Calibri", 24),
+            fill="white"
+        )
+        self.root.after(duration, self.clear_canvas)
+
+    def clear_canvas(self):
+        """
+        Clears the canvas content.
+        """
+        self.canvas.delete("all")
 
     def video_processing(self):
         """
