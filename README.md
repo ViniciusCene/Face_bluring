@@ -25,7 +25,12 @@ The GUI offers the following controls:
    - Toggles the visibility of eyes in the blurred regions.
    - **ON**: Eyes remain unblurred while the rest of the face is blurred.
    - **OFF**: Entire face is blurred.
-4. **Exit Program**:
+4. **Offline Processing**:
+   - Allows processing of multiple video files in a selected directory.
+   - Saves blurred videos in a subfolder named `blurred files` in the same directory.
+   - Replaces previously processed videos if they exist.
+   - Supports various formats, including `.avi`, `.mp4`, `.mov`, and `.mkv`.   
+5. **Exit Program**:
    - Stops video processing (if running) and exits the application.
 
 #### Sliders:
@@ -41,7 +46,8 @@ The GUI offers the following controls:
 
 ### Output
 - Displays real-time processed video with blurred faces.
-- Saves the video to a file (`output_blurred.avi`) upon exiting.
+- Saves the video to a file (`output_blurred.mp4`) upon exiting.
+- Offline processing outputs are saved to a folder named `blurred files`.
 
 ## Project Structure
 
@@ -85,7 +91,12 @@ YuNet_Automatic_Face_Blurring/
 
 3. Interact with the GUI:
    - Adjust sliders to configure the face detection and blurring parameters.
-   - Use the buttons to start/stop processing, toggle full-screen mode, enable/disable eye visibility, and exit the program.
+   - Use the buttons to start/stop processing, toggle full-screen mode, enable/disable eye visibility, perform offline batch video processing. and exit the program.
+
+4. Offline Video Processing:
+   - Click the Offline Processing button to select a directory containing video files.
+   - All supported videos (`.avi`, `.mp4`, `.mov`, and `.mkv`.) will be processed.
+   - Processed videos are saved in a subfolder named blurred files.
 
 ## How It Works
 
