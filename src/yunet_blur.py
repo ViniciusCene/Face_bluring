@@ -556,6 +556,14 @@ class YuNetBlurGUI:
         if results is None or results.size == 0:
             return image
 
+        # Original frame dimensions
+        original_height, original_width = image.shape[:2]
+        input_width, input_height = 320, 320  # Model input size
+
+        # Scaling factors to map from model's input size to the original frame size
+        scale_x = original_width / input_width
+        scale_y = original_height / input_height
+        
         for det in results:
             roi_x0, roi_y0, roi_w, roi_h = det[:4].astype(int)
             scale_ratio = self.blur_area / 100.0  # Convert percentage to ratio
@@ -569,10 +577,32 @@ class YuNetBlurGUI:
 
             # Extract the ROI and apply the blur
             roi = image[y:y+h, x:x+w]
+            original_frame = image.copy()
             if roi.size > 0:  # Ensure the ROI is valid
                 kernel_size = max(1, self.blur_intensity * 10 + 1)  # Scale kernel size
                 blurred_roi = cv.GaussianBlur(roi, (kernel_size, kernel_size), 999)
                 image[y:y+h, x:x+w] = blurred_roi
+
+            # Handle eyes_visible
+            if self.eyes_visible:
+                landmarks = det[4:14].reshape(5, 2).astype(int)
+                # Right eye and left eye coordinates
+                right_eye, left_eye = landmarks[0], landmarks[1]
+
+                for eye in [right_eye, left_eye]:
+                    ex, ey = eye
+                    # Define a 50x50 region around the eye
+                    eye_x0 = max(0, int(ex*scale_x) - 50)
+                    eye_y0 = max(0, int(ey*scale_y) - 50)
+                    eye_x1 = min(image.shape[1], int(ex*scale_x) + 50)
+                    eye_y1 = min(image.shape[0], int(ey*scale_y) + 50)
+
+                    # Extract the corresponding region from the original image
+                    if 0 <= (eye_x1 - eye_x0) > 0 and 0 <= (eye_y1 - eye_y0) > 0:
+                        unblurred_eye = original_frame[eye_y0:eye_y1, eye_x0:eye_x1]
+
+                        # Ensure proper alignment and replace the blurred region with the unblurred region
+                        image[eye_y0:eye_y1, eye_x0:eye_x1] = unblurred_eye
 
         return image
 
