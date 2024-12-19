@@ -26,7 +26,6 @@ class AppControls:
             print(f"Error: Directory {directory} does not exist.")
             return
 
-        # List video files in the directory
         video_files = [f for f in os.listdir(directory) if f.endswith(('.mp4', '.avi', '.mkv'))]
         if not video_files:
             print(f"No video files found in {directory}.")
@@ -102,7 +101,12 @@ class AppControls:
         frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
         frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv.CAP_PROP_FPS) or 30  # Default to 30 FPS if unavailable
-        self.saver.initialize_writer((frame_width, frame_height), fps)
+        
+        # Set default output path for real-time processing
+        output_path = os.path.join("output_videos", "realtime_output.mp4")
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        self.saver.initialize_writer((frame_width, frame_height), fps, output_path)
 
         try:
             while self.running:
