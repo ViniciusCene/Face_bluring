@@ -1,22 +1,78 @@
 import threading
 import cv2 as cv
 from PIL import Image, ImageTk
+import os
 
 
 class AppControls:
     def __init__(self):
         self.running = False
-        self.eyes_visible = False
-        self.thread = None
+        self.eyes_visible = False 
         self.processor = None
         self.saver = None
-        self.canvas = None
-        self.image_on_canvas = None
 
     def set_dependencies(self, processor, saver):
         """Set dependencies for the controls."""
         self.processor = processor
         self.saver = saver
+
+    def toggle_eyes_visible(self):
+        """Toggle the eyes_visible attribute."""
+        self.eyes_visible = not self.eyes_visible        
+
+    def process_offline(self, directory):
+        """Process all video files in the selected directory."""
+        if not os.path.exists(directory):
+            print(f"Error: Directory {directory} does not exist.")
+            return
+
+        # List video files in the directory
+        video_files = [f for f in os.listdir(directory) if f.endswith(('.mp4', '.avi', '.mkv'))]
+        if not video_files:
+            print(f"No video files found in {directory}.")
+            return
+
+        output_dir = os.path.join(directory, "blurred_files")
+        os.makedirs(output_dir, exist_ok=True)
+
+        for video_file in video_files:
+            input_path = os.path.join(directory, video_file)
+            output_path = os.path.join(output_dir, f"{os.path.splitext(video_file)[0]}_blurred.mp4")
+
+            print(f"Processing: {video_file}")
+
+            # Open video for reading
+            cap = cv.VideoCapture(input_path)
+            if not cap.isOpened():
+                print(f"Error: Could not open {video_file}. Skipping.")
+                continue
+
+            # Get video properties
+            frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+            frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+            fps = cap.get(cv.CAP_PROP_FPS) or 30
+
+            # Initialize video writer
+            self.saver.initialize_writer((frame_width, frame_height), fps, output_path)
+
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                # Process frame
+                processed_frame = self.processor.process_frame(frame)
+
+                # Write processed frame
+                self.saver.write_frame(processed_frame)
+
+            # Release video resources
+            cap.release()
+            self.saver.finalize_writer()
+
+            print(f"Processed: {video_file}")
+
+        print("All videos processed.")
 
     def start_processing(self, canvas, image_on_canvas):
         """Start video processing thread."""
