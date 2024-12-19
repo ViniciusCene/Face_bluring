@@ -1,18 +1,14 @@
 import cv2 as cv
-import os
 
 
 class DataSaver:
     def __init__(self):
-        self.output_path = "output_videos"
-        if not os.path.exists(self.output_path):
-            os.makedirs(self.output_path)
         self.writer = None
 
-    def initialize_writer(self, frame_size, fps):
-        """Initialize video writer."""
+    def initialize_writer(self, frame_size, fps, output_path):
+        """Initialize the video writer with a specific output path."""
         self.writer = cv.VideoWriter(
-            os.path.join(self.output_path, "output.mp4"),
+            output_path,
             cv.VideoWriter_fourcc(*"mp4v"),
             fps,
             frame_size
