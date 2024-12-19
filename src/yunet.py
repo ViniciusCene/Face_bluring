@@ -4,54 +4,55 @@
 # Copyright (C) 2021, Shenzhen Institute of Artificial Intelligence and Robotics for Society, all rights reserved.
 # Third party copyrights are property of their respective owners.
 
-from itertools import product
-
-import numpy as np
 import cv2 as cv
 
+
 class YuNet:
-    def __init__(self, modelPath, inputSize=[320, 320], confThreshold=0.6, nmsThreshold=0.3, topK=5000, backendId=0, targetId=0):
-        self._modelPath = modelPath
-        self._inputSize = tuple(inputSize) # [w, h]
-        self._confThreshold = confThreshold
-        self._nmsThreshold = nmsThreshold
-        self._topK = topK
-        self._backendId = backendId
-        self._targetId = targetId
+    def __init__(self, model_path):
+        """
+        Initialize the YuNet face detection model with optional GPU acceleration.
+        """
+        self.model_path = model_path
+        self._model = self._load_model()
 
-        self._model = cv.FaceDetectorYN.create(
-            model=self._modelPath,
+    def _load_model(self):
+        """
+        Load the YuNet model with GPU acceleration if available.
+        """
+        # Load the ONNX model
+        net = cv.dnn.readNet(self.model_path)
+
+        # Check for GPU availability
+        if cv.cuda.getCudaEnabledDeviceCount() > 0:
+            print("[INFO] Using GPU acceleration for YuNet.")
+            net.setPreferableBackend(cv.dnn.DNN_BACKEND_CUDA)
+            net.setPreferableTarget(cv.dnn.DNN_TARGET_CUDA)
+        else:
+            print("[INFO] GPU not available. Using CPU.")
+            net.setPreferableBackend(cv.dnn.DNN_BACKEND_DEFAULT)
+            net.setPreferableTarget(cv.dnn.DNN_TARGET_CPU)
+
+        # Configure the model
+        face_detector = cv.FaceDetectorYN_create(
+            model=self.model_path,
             config="",
-            input_size=self._inputSize,
-            score_threshold=self._confThreshold,
-            nms_threshold=self._nmsThreshold,
-            top_k=self._topK,
-            backend_id=self._backendId,
-            target_id=self._targetId)
+            input_size=(320, 320),
+            score_threshold=0.9,
+            nms_threshold=0.3,
+            top_k=5000,
+        )
+        face_detector.setNet(net)
+        return face_detector
 
-    @property
-    def name(self):
-        return self.__class__.__name__
+    def detect(self, frame):
+        """
+        Perform face detection on the given frame.
 
-    def setBackendAndTarget(self, backendId, targetId):
-        self._backendId = backendId
-        self._targetId = targetId
-        print("backendId: ", backendId)
-        print("targetId: ", targetId)
-        self._model = cv.FaceDetectorYN.create(
-            model=self._modelPath,
-            config="",
-            input_size=self._inputSize,
-            score_threshold=self._confThreshold,
-            nms_threshold=self._nmsThreshold,
-            top_k=self._topK,
-            backend_id=self._backendId,
-            target_id=self._targetId)
+        Parameters:
+            frame (numpy.ndarray): The input frame.
 
-    def setInputSize(self, input_size):
-        self._model.setInputSize(tuple(input_size))
-
-    def infer(self, image):
-        # Forward
-        faces = self._model.detect(image)
-        return np.empty(shape=(0, 5)) if faces[1] is None else faces[1]
+        Returns:
+            numpy.ndarray: Detection results (bounding boxes, landmarks, scores).
+        """
+        results = self._model.detect(frame)
+        return results
