@@ -1,7 +1,9 @@
-import threading
+import os
+import concurrent.futures
 import cv2 as cv
 from PIL import Image, ImageTk
-import os
+from image_processing import ImageProcessor
+from data_saving import DataSaver
 
 
 class AppControls:
@@ -34,37 +36,42 @@ class AppControls:
         output_dir = os.path.join(directory, "blurred_files")
         os.makedirs(output_dir, exist_ok=True)
 
-        for video_file in video_files:
+        def process_video(video_file):
             input_path = os.path.join(directory, video_file)
             output_path = os.path.join(output_dir, f"{os.path.splitext(video_file)[0]}_blurred.mp4")
-            
             try:
                 print(f"Processing: {video_file}")
 
-                # Open video for reading
-                cap = cv.VideoCapture(input_path)
-                if not cap.isOpened():
-                    print(f"Error: Could not open {video_file}. Skipping.")
-                    continue
+                # Check if video file is readable
+                test_cap = cv.VideoCapture(input_path)
+                if not test_cap.isOpened():
+                    raise IOError(f"Could not open video file: {video_file}")
+                test_cap.release()
 
                 # Get video properties
+                cap = cv.VideoCapture(input_path)
                 frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
                 frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
                 fps = cap.get(cv.CAP_PROP_FPS) or 30
 
-                # Initialize video writer
-                self.saver.initialize_writer((frame_width, frame_height), fps, output_path)
+                # Use independent instances of ImageProcessor and DataSaver
+                local_processor = ImageProcessor(self)  # Create a new instance
+                local_saver = DataSaver()
+                local_saver.initialize_writer((frame_width, frame_height), fps, output_path)
 
                 while cap.isOpened():
                     ret, frame = cap.read()
                     if not ret:
                         break
 
-                    # Process frame
-                    processed_frame = self.processor.process_frame(frame)
+                    # Process the frame
+                    processed_frame = local_processor.process_frame(frame)
 
                     # Write processed frame
-                    self.saver.write_frame(processed_frame)
+                    local_saver.write_frame(processed_frame)
+
+                    # Write processed frame
+                    ## self.saver.write_frame(processed_frame)
 
                 # Release video resources
                 cap.release()
@@ -74,7 +81,16 @@ class AppControls:
             except Exception as e:
                 print(f"Error processing {video_file}: {e}")
 
-        print("All videos processed.")
+        # Use ThreadPoolExecutor for parallel processing
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = [executor.submit(process_video, video_file) for video_file in video_files]
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    future.result()  # Raise exception if the task failed
+                except Exception as e:
+                    print(f"Error in thread: {e}")
+
+        print("Offline processing completed.")
 
     def start_processing(self, canvas, image_on_canvas):
         """Start video processing thread."""
