@@ -37,39 +37,42 @@ class AppControls:
         for video_file in video_files:
             input_path = os.path.join(directory, video_file)
             output_path = os.path.join(output_dir, f"{os.path.splitext(video_file)[0]}_blurred.mp4")
+            
+            try:
+                print(f"Processing: {video_file}")
 
-            print(f"Processing: {video_file}")
+                # Open video for reading
+                cap = cv.VideoCapture(input_path)
+                if not cap.isOpened():
+                    print(f"Error: Could not open {video_file}. Skipping.")
+                    continue
 
-            # Open video for reading
-            cap = cv.VideoCapture(input_path)
-            if not cap.isOpened():
-                print(f"Error: Could not open {video_file}. Skipping.")
-                continue
+                # Get video properties
+                frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+                frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+                fps = cap.get(cv.CAP_PROP_FPS) or 30
 
-            # Get video properties
-            frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
-            frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
-            fps = cap.get(cv.CAP_PROP_FPS) or 30
+                # Initialize video writer
+                self.saver.initialize_writer((frame_width, frame_height), fps, output_path)
 
-            # Initialize video writer
-            self.saver.initialize_writer((frame_width, frame_height), fps, output_path)
+                while cap.isOpened():
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
 
-            while cap.isOpened():
-                ret, frame = cap.read()
-                if not ret:
-                    break
+                    # Process frame
+                    processed_frame = self.processor.process_frame(frame)
 
-                # Process frame
-                processed_frame = self.processor.process_frame(frame)
+                    # Write processed frame
+                    self.saver.write_frame(processed_frame)
 
-                # Write processed frame
-                self.saver.write_frame(processed_frame)
+                # Release video resources
+                cap.release()
+                self.saver.finalize_writer()
+                print(f"Processed: {video_file}")
 
-            # Release video resources
-            cap.release()
-            self.saver.finalize_writer()
-
-            print(f"Processed: {video_file}")
+            except Exception as e:
+                print(f"Error processing {video_file}: {e}")
 
         print("All videos processed.")
 
@@ -91,29 +94,25 @@ class AppControls:
 
     def _process_video(self):
         """Video processing logic for real-time frame processing."""
-        cap = cv.VideoCapture(0)
-        if not cap.isOpened():
-            print("Error: Could not open video source.")
-            self.running = False
-            return
-
-        # Initialize video writer for saving processed output
-        frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
-        frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
-        fps = cap.get(cv.CAP_PROP_FPS) or 30  # Default to 30 FPS if unavailable
-        
-        # Set default output path for real-time processing
-        output_path = os.path.join("output_videos", "realtime_output.mp4")
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        
-        self.saver.initialize_writer((frame_width, frame_height), fps, output_path)
-
         try:
+            cap = cv.VideoCapture(0)
+            if not cap.isOpened():
+                raise IOError("Could not open video source.")
+
+            # Initialize video writer for saving processed output
+            frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+            frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+            fps = cap.get(cv.CAP_PROP_FPS) or 30  # Default to 30 FPS if unavailable
+            
+            # Set default output path for real-time processing
+            output_path = os.path.join("output_videos", "realtime_output.mp4")
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            self.saver.initialize_writer((frame_width, frame_height), fps, output_path)
+
             while self.running:
                 ret, frame = cap.read()
                 if not ret:
-                    print("Error: Failed to capture frame.")
-                    break
+                    raise IOError("Failed to capture frame.")
 
                 # Process the frame
                 processed_frame = self.processor.process_frame(frame)
@@ -137,14 +136,14 @@ class AppControls:
                 self.canvas.create_image(0, 0, anchor="nw", image=self.photo)
                 self.canvas.photo = self.photo  # Keep a reference to prevent garbage collection
 
-        except RuntimeError as e:
-            print(f"Runtime error: {e}")
-        finally:
-            # Release resources
             cap.release()
             self.saver.finalize_writer()
             self.canvas.delete(self.image_on_canvas)
             cv.destroyAllWindows()
+
+        except Exception as e:
+            print(f"Real-time processing error: {e}")
+            self.running = False
 
     def _resize_frame_to_canvas(self, frame, canvas_width, canvas_height):
         """Resize the frame to fill the canvas while maintaining aspect ratio."""

@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, messagebox
 
 
 class YuNetBlurGUI:
@@ -75,6 +75,10 @@ class YuNetBlurGUI:
 
         # Create an image placeholder on the canvas
         self.image_on_canvas = self.canvas.create_image(0, 0, anchor=tk.NW)
+    
+    def show_error_message(self, message):
+        """Display an error message to the user."""
+        messagebox.showerror("Error", message)
 
     def start_stop(self):
         """Start or stop video processing."""

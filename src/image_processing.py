@@ -9,7 +9,11 @@ class ImageProcessor:
         self.confidence_threshold = 0.45  # Default confidence threshold
         self.blur_intensity = 10         # Default blur intensity
         self.blur_area = 120             # Default blur area (percentage)
-        self.face_detector = self._load_model()
+        try:
+            self.face_detector = self._load_model()
+        except Exception as e:
+            print(f"Error loading YuNet model: {e}")
+            self.face_detector = None
 
     def _load_model(self):
         """Load the YuNet face detection model."""
@@ -17,6 +21,15 @@ class ImageProcessor:
             os.path.dirname(__file__),
             "trained_models/yunet/face_detection_yunet_2023mar.onnx"
         )
+        
+        net = cv.dnn.readNet(model_path)
+        if cv.cuda.getCudaEnabledDeviceCount() > 0:
+            net.setPreferableBackend(cv.dnn.DNN_BACKEND_CUDA)
+            net.setPreferableTarget(cv.dnn.DNN_TARGET_CUDA)
+        else:
+            net.setPreferableBackend(cv.dnn.DNN_BACKEND_DEFAULT)
+            net.setPreferableTarget(cv.dnn.DNN_TARGET_CPU)
+        
         return cv.FaceDetectorYN.create(
             model=model_path,
             config="",
