@@ -1,17 +1,23 @@
 import os
 import concurrent.futures
+import threading
+import logging
 import cv2 as cv
 from PIL import Image, ImageTk
 from image_processing import ImageProcessor
 from data_saving import DataSaver
 
+# Setup logging
+logging.basicConfig(filename='processing.log', level=logging.INFO, format='%(asctime)s - %(message)s')
+
 
 class AppControls:
-    def __init__(self):
+    def __init__(self, root=None):
         self.running = False
-        self.eyes_visible = False 
+        self.eyes_visible = False
         self.processor = None
         self.saver = None
+        self.root = root
 
     def set_dependencies(self, processor, saver):
         """Set dependencies for the controls."""
@@ -20,33 +26,38 @@ class AppControls:
 
     def toggle_eyes_visible(self):
         """Toggle the eyes_visible attribute."""
-        self.eyes_visible = not self.eyes_visible        
+        self.eyes_visible = not self.eyes_visible
 
-    def process_offline(self, directory):
-        """Process all video files in the selected directory."""
+    def process_offline(self, directory, update_progress):
+        """Process all video files in the selected directory with multi-threading and immediate thread exit for errors."""
         if not os.path.exists(directory):
-            print(f"Error: Directory {directory} does not exist.")
+            update_progress(0, 1, "Error: Directory does not exist.")
+            logging.error("Error: Directory does not exist.")
             return
 
         video_files = [f for f in os.listdir(directory) if f.endswith(('.mp4', '.avi', '.mkv'))]
+        total_files = len(video_files)
         if not video_files:
-            print(f"No video files found in {directory}.")
+            update_progress(0, 1, "No video files found.")
+            logging.info("No video files found.")
             return
 
         output_dir = os.path.join(directory, "blurred_files")
         os.makedirs(output_dir, exist_ok=True)
 
-        def process_video(video_file):
+        def process_video(video_file, idx):
             input_path = os.path.join(directory, video_file)
             output_path = os.path.join(output_dir, f"{os.path.splitext(video_file)[0]}_blurred.mp4")
+
             try:
                 print(f"Processing: {video_file}")
 
                 # Check if video file is readable
-                test_cap = cv.VideoCapture(input_path)
-                if not test_cap.isOpened():
-                    raise IOError(f"Could not open video file: {video_file}")
-                test_cap.release()
+                #test_cap = cv.VideoCapture(input_path)
+                #if not test_cap.isOpened():
+                #    raise IOError(f"Could not open video file: {video_file}")
+                #    return
+                #test_cap.release()
 
                 # Get video properties
                 cap = cv.VideoCapture(input_path)
@@ -55,7 +66,7 @@ class AppControls:
                 fps = cap.get(cv.CAP_PROP_FPS) or 30
 
                 # Use independent instances of ImageProcessor and DataSaver
-                local_processor = ImageProcessor(self)  # Create a new instance
+                local_processor = ImageProcessor(self)
                 local_saver = DataSaver()
                 local_saver.initialize_writer((frame_width, frame_height), fps, output_path)
 
@@ -63,35 +74,41 @@ class AppControls:
                     ret, frame = cap.read()
                     if not ret:
                         break
-
-                    # Process the frame
-                    processed_frame = local_processor.process_frame(frame)
-
-                    # Write processed frame
-                    local_saver.write_frame(processed_frame)
-
-                    # Write processed frame
-                    ## self.saver.write_frame(processed_frame)
+                    
+                    # Ensure the processed frame is valid before writing
+                    if frame is not None and frame.size > 0:
+                        processed_frame = local_processor.process_frame(frame)
+                        local_saver.write_frame(processed_frame)
 
                 # Release video resources
                 cap.release()
                 self.saver.finalize_writer()
                 print(f"Processed: {video_file}")
+                logging.info(f"Processed: {video_file}")
+                # Schedule progress update in the main thread
+                if self.root:
+                    self.root.after(0, update_progress, idx + 1, total_files, f"Processed: {video_file}")
 
             except Exception as e:
-                print(f"Error processing {video_file}: {e}")
+                logging.error(f"Error processing {video_file}: {e}")
+                if self.root:
+                    self.root.after(0, update_progress, idx + 1, total_files, f"Error: {video_file}")
 
         # Use ThreadPoolExecutor for parallel processing
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = [executor.submit(process_video, video_file) for video_file in video_files]
+            futures = [executor.submit(process_video, video_file, idx) for idx, video_file in enumerate(video_files)]
+
             for future in concurrent.futures.as_completed(futures):
                 try:
-                    future.result()  # Raise exception if the task failed
+                    future.result()
                 except Exception as e:
+                    logging.error(f"Error in thread for file {video_file}: {e}")
                     print(f"Error in thread: {e}")
 
-        print("Offline processing completed.")
-
+        update_progress(total_files, total_files, "All videos processed.")
+        logging.info("All videos processed.")
+        print("You can click Start for online processing, perform a new offline processing or exit.")
+                    
     def start_processing(self, canvas, image_on_canvas):
         """Start video processing thread."""
         self.running = True
