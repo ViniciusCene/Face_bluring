@@ -6,12 +6,8 @@ class YuNetBlurGUI:
     def __init__(self, root, controls, processor, saver):
         self.root = root
         self.controls = controls
-        self.processor = processor
+        self.processor = processor  # Ensure processor is initialized
         self.saver = saver
-
-        # Configure the root window
-        self.root.title("YuNet Face Blurring")
-        self.root.geometry("1200x800")
         self.create_widgets()
 
     def create_widgets(self):
@@ -21,53 +17,63 @@ class YuNetBlurGUI:
         slider_frame = tk.Frame(self.root)
         slider_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
 
-        # Sliders for controls (as before)
+        # Sliders for controls
         self.threshold_label = tk.Label(slider_frame, text="Confidence Threshold", font=("Arial", 10))
-        self.threshold_label.grid(row=0, column=0, padx=5, sticky="w")
+        self.threshold_label.pack(side=tk.LEFT, padx=5)
         self.threshold_slider = ttk.Scale(slider_frame, from_=0.1, to=1.0, length=200, command=self.update_threshold)
         self.threshold_slider.set(0.5)
-        self.threshold_slider.grid(row=1, column=0, padx=5)
+        self.threshold_slider.pack(side=tk.LEFT, padx=5)
 
         self.blur_label = tk.Label(slider_frame, text="Blur Intensity", font=("Arial", 10))
-        self.blur_label.grid(row=0, column=1, padx=5, sticky="w")
+        self.blur_label.pack(side=tk.LEFT, padx=5)
         self.blur_slider = ttk.Scale(slider_frame, from_=1, to=20, length=200, command=self.update_blur_intensity)
         self.blur_slider.set(10)
-        self.blur_slider.grid(row=1, column=1, padx=5)
+        self.blur_slider.pack(side=tk.LEFT, padx=5)
 
         self.blur_area_label = tk.Label(slider_frame, text="Blur Area", font=("Arial", 10))
-        self.blur_area_label.grid(row=0, column=2, padx=5, sticky="w")
+        self.blur_area_label.pack(side=tk.LEFT, padx=5)
         self.blur_area_slider = ttk.Scale(slider_frame, from_=100, to=200, length=200, command=self.update_blur_area)
         self.blur_area_slider.set(150)
-        self.blur_area_slider.grid(row=1, column=2, padx=5)
+        self.blur_area_slider.pack(side=tk.LEFT, padx=5)
 
         # Frame for buttons
         button_frame = tk.Frame(self.root)
         button_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
 
         self.start_button = tk.Button(
-            button_frame, text="Start", command=self.start_stop, width=15, font=("Arial", 12, "bold")
+            button_frame, text="Start", command=self.start_stop, width=15, font=("Arial", 12)
         )
-        self.start_button.grid(row=0, column=0, padx=5)
+        self.start_button.pack(side=tk.LEFT, padx=5)
 
         self.full_screen_button = tk.Button(
-            button_frame, text="Enable Full Screen", command=self.toggle_full_screen, width=15, font=("Arial", 12, "bold")
+            button_frame, text="Enable Full Screen", command=self.toggle_full_screen, width=15, font=("Arial", 12)
         )
-        self.full_screen_button.grid(row=0, column=1, padx=5)
+        self.full_screen_button.pack(side=tk.LEFT, padx=5)
 
         self.eyes_visible_button = tk.Button(
-            button_frame, text="Eyes Visible: OFF", command=self.toggle_eyes_visible, width=15, font=("Arial", 12, "bold")
+            button_frame, text="Eyes Visible: OFF", command=self.toggle_eyes_visible, width=15, font=("Arial", 12)
         )
-        self.eyes_visible_button.grid(row=0, column=2, padx=5)
+        self.eyes_visible_button.pack(side=tk.LEFT, padx=5)
 
         self.offline_button = tk.Button(
-            button_frame, text="Offline Processing", command=self.offline_processing, width=20, font=("Arial", 12, "bold")
+            button_frame, text="Offline Processing", command=self.offline_processing, width=20, font=("Arial", 12)
         )
-        self.offline_button.grid(row=0, column=3, padx=5)
+        self.offline_button.pack(side=tk.LEFT, padx=5)
 
         self.exit_button = tk.Button(
-            button_frame, text="Exit", command=self.exit_program, width=15, font=("Arial", 12, "bold")
+            button_frame, text="Exit", command=self.exit_program, width=15, font=("Arial", 12)
         )
-        self.exit_button.grid(row=0, column=4, padx=5)
+        self.exit_button.pack(side=tk.LEFT, padx=5)
+
+        # Frame for progress indicators
+        progress_frame = tk.Frame(self.root)
+        progress_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+
+        self.overall_progress = ttk.Progressbar(progress_frame, orient="horizontal", length=400, mode="determinate")
+        self.overall_progress.pack(side=tk.TOP, padx=5, pady=5)
+
+        self.current_progress_label = tk.Label(progress_frame, text="No processing yet", font=("Arial", 10))
+        self.current_progress_label.pack(side=tk.TOP, padx=5, pady=5)
 
         # Canvas for video display
         self.canvas = tk.Canvas(self.root, bg="black", width=800, height=600)
@@ -112,11 +118,11 @@ class YuNetBlurGUI:
         status = "ON" if self.controls.eyes_visible else "OFF"
         self.eyes_visible_button.config(text=f"Eyes Visible: {status}")
 
-    def offline_processing(self):
-        """Handle offline processing."""
-        directory = filedialog.askdirectory(title="Select Directory for Offline Processing")
-        if directory:
-            self.controls.process_offline(directory)
+    #def offline_processing(self):
+    #    """Handle offline processing."""
+    #    directory = filedialog.askdirectory(title="Select Directory for Offline Processing")
+    #    if directory:
+     #       self.controls.process_offline(directory, self.update_progress)
 
     def exit_program(self):
         """Exit the program."""
@@ -134,3 +140,15 @@ class YuNetBlurGUI:
     def update_blur_area(self, value):
         """Update the blur area."""
         self.processor.blur_area = int(float(value))
+
+    def offline_processing(self):
+        """Handle offline processing."""
+        directory = filedialog.askdirectory(title="Select Directory for Offline Processing")
+        if directory:
+            self.controls.process_offline(directory, self.update_progress)
+
+    def update_progress(self, current, total, message="Processing..."):
+        """Update the progress bar and status label."""
+        self.overall_progress["value"] = (current / total) * 100
+        self.current_progress_label["text"] = message
+        self.root.update_idletasks()
